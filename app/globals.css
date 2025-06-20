@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Add your custom root colors here */
+  --primary-color: #4a90e2;
+  --secondary-color: #f5a623;
+  --text-color: #333;
+}
