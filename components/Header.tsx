@@ -1,9 +1,58 @@
+"use client";
+
 import React from "react";
+import Link from "next/link";
+import { HiOutlineUser, HiOutlineLogout } from "react-icons/hi";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 const Header: React.FC = () => {
+  const { user, isAuthenticated, logout } = useAuth();
+  
   return (
-    <header className="bg-gray-800 text-white p-4">
-      <h1 className="text-xl">Dashboard</h1>
+    <header className="bg-[var(--header-gray)] text-white p-4 shadow-sm">
+      <div className="max-w-full mx-auto flex items-center justify-between">
+        <h1 className="text-xl font-bold">Casanova</h1>
+        
+        <div className="flex items-center space-x-3">
+          {isAuthenticated && user ? (
+            <>
+              <div className="bg-gray-700 px-4 py-1.5 rounded-md flex items-center min-w-[150px]">
+                <div className="mr-2">
+                  <div className="h-6 w-6 rounded-full bg-gray-400 flex items-center justify-center text-gray-800 text-xs font-bold">
+                    {user.username.charAt(0).toUpperCase()}
+                  </div>
+                </div>
+                <span className="text-sm font-medium truncate">{user.username}</span>
+              </div>
+              <button 
+                onClick={logout}
+                className="p-2 rounded-full hover:bg-gray-700 transition-colors"
+                title="Logout"
+              >
+                <HiOutlineLogout size={20} />
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="bg-gray-700 px-4 py-1.5 rounded-md flex items-center min-w-[150px]">
+                <div className="mr-2">
+                  <div className="h-6 w-6 rounded-full bg-gray-400 flex items-center justify-center text-gray-800 text-xs font-bold">
+                    G
+                  </div>
+                </div>
+                <span className="text-sm font-medium">Guest</span>
+              </div>
+              <Link 
+                href="/login" 
+                className="p-2 rounded-full hover:bg-gray-700 transition-colors"
+                title="Login"
+              >
+                <HiOutlineUser size={20} />
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
     </header>
   );
 };

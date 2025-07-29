@@ -8,15 +8,18 @@ interface PageHeaderProps {
 const Banner: React.FC<PageHeaderProps> = (props) => {
   return (
     <div
-      className="relative w-full h-48 bg-blue-950 bg-cover bg-center flex items-center  rounded-b-xl overflow-hidden shadow-lg"
-      style={{ backgroundImage: "url('/banner.jpg')" }}
+      className="relative w-full h-48 bg-cover bg-center flex items-center rounded-b-xl overflow-hidden shadow-lg"
+      style={{ 
+        backgroundImage: "url('/banner.jpg')",
+        backgroundColor: "var(--accent-color)" 
+      }}
     >
       {/* Overlay for better visibility */}
-      <div className="absolute inset-0 bg-black/10"></div>
+      <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent"></div>
 
       {/* Logo inside the banner */}
-      <div className="relative z-10 text-white p-4">
-        <h1 className="text-5xl flex items-center gap-2">
+      <div className="relative z-10 text-white p-6">
+        <h1 className="text-5xl font-bold flex items-center gap-3">
           {props.icon}
           {props.title}
         </h1>

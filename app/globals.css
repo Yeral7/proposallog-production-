@@ -1,10 +1,38 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+ 
 :root {
-  /* Add your custom root colors here */
-  --primary-color: #4a90e2;
-  --secondary-color: #f5a623;
-  --text-color: #333;
+  --primary-color: #111827; /* gray-900 - matches sidebar */
+  --secondary-color: #1f2937; /* gray-800 */
+  --accent-color: #374151; /* gray-700 */
+  --text-color: #000000;
+  --subtext-color: #9B9B9B;
+  --sidebar-gray: #111827; /* gray-900 - actual sidebar color */
+  --header-gray: #111827; /* gray-900 - to match sidebar */
+  --font-primary: 'Poppins', sans-serif;
+}
+ 
+@layer base {
+  body {
+    font-family: var(--font-primary);
+  }
+}
+ 
+@layer utilities {
+  .text-primary {
+    color: var(--primary-color);
+  }
+ 
+  .text-subtext {
+    color: var(--subtext-color);
+  }
+ 
+  .bg-secondary {
+    background-color: var(--secondary-color);
+  }
+ 
+  .hover\:bg-accent:hover {
+    background-color: var(--accent-color);
+  }
 }
