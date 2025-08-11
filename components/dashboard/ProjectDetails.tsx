@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Project } from './ProposalTable';
 import { HiPlus, HiPencil, HiX, HiPhone, HiClipboard, HiMail, HiEye, HiDocumentText } from "react-icons/hi";
+import { formatDateToCharlotte, formatDateTimeToCharlotte } from '../../lib/timezone';
 import ConfirmationDialog from "../common/ConfirmationDialog";
 import CallConfirmationDialog from "../common/CallConfirmationDialog";
 
@@ -19,13 +20,13 @@ interface Drawing {
   id: string;
   title: string;
   url: string;
-  date: string;
+  created_at: string;
 }
 
 interface Note {
   id: string;
   text: string;
-  date: string;
+  created_at: string;
   author: string;
 }
 
@@ -102,7 +103,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           setNotes(data.map(note => ({
             id: note.id.toString(),
             text: note.note_text,
-            date: note.created_at,
+            created_at: note.created_at,
             author: note.author
           })));
         } else {
@@ -123,7 +124,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
             id: drawing.id.toString(),
             title: drawing.title,
             url: drawing.url,
-            date: drawing.created_at
+            created_at: drawing.created_at
           })));
         } else {
           console.error('Failed to fetch drawings');
@@ -242,7 +243,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           id: savedDrawing.id.toString(),
           title: savedDrawing.title,
           url: savedDrawing.url,
-          date: savedDrawing.created_at,
+          created_at: savedDrawing.created_at,
         };
 
         if (isEditMode) {
@@ -297,7 +298,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
       const newNote: Note = {
         id: newNoteFromApi.id.toString(),
         text: newNoteFromApi.note_text,
-        date: newNoteFromApi.created_at,
+        created_at: newNoteFromApi.created_at,
         author: newNoteFromApi.author,
       };
 
@@ -458,7 +459,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
                   <button onClick={() => handleDeleteClick(drawing.id, 'drawings')} className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"><HiX size={16} /></button>
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mb-4">{new Date(drawing.date).toLocaleDateString()}</p>
+              <p className="text-sm text-gray-600 mb-4">{formatDateToCharlotte(drawing.created_at)}</p>
               
               <div className="flex items-center space-x-2 text-sm text-gray-700 group">
                 <HiEye size={16} className="text-gray-400 flex-shrink-0"/>
@@ -499,7 +500,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
                       <div className="text-sm text-gray-500">
                         <span className="font-medium text-gray-900">{note.author}</span>
                         {' posted on '}
-                        <time dateTime={note.date}>{new Date(note.date).toLocaleString()}</time>
+                        <time dateTime={note.created_at}>{formatDateTimeToCharlotte(note.created_at)}</time>
                       </div>
                       <div className="mt-2 text-sm text-gray-700 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                         <p className="whitespace-pre-wrap">{note.text}</p>
