@@ -33,7 +33,6 @@ import {
   PolarRadiusAxis,
   Radar
 } from 'recharts';
-import { formatDateToCharlotte } from '../../lib/timezone';
 
 // Define types for our data
 interface Project {
@@ -389,7 +388,7 @@ const AnalyticsPage = () => {
                                   <td className="py-1 sm:py-2 px-2 sm:px-4 text-right text-xs sm:text-base">${project.contract_value?.toLocaleString() || 'N/A'}</td>
                                   <td className="py-1 sm:py-2 px-2 sm:px-4 text-xs sm:text-base">
                                     {project.due_date 
-                                      ? formatDateToCharlotte(project.due_date) 
+                                      ? new Date(project.due_date).toLocaleDateString() 
                                       : 'N/A'}
                                   </td>
                                 </tr>

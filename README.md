@@ -1,4 +1,4 @@
-# Cicada Construction Remodeling - Project Management Dashboard
+Proposal Log de chi;
 
 This is a comprehensive project management dashboard for Cicada Construction Remodeling, built with Next.js and a SQLite backend. It provides tools for managing proposals, residential projects, and administrative data like builders, estimators, and project statuses.
 
@@ -34,7 +34,7 @@ Follow these instructions to get a copy of the project up and running on your lo
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18.x or later recommended)
-- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
+- [npm](https://www.npmjs.com/) 
 
 ### Installation
 

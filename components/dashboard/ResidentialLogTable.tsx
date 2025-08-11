@@ -1,6 +1,5 @@
 import React from 'react';
 import { HiPencil, HiChevronUp, HiChevronDown, HiSelector } from 'react-icons/hi';
-import { formatDateToCharlotte } from '../../lib/timezone';
 
 // Define the type for a single project, including the joined data
 export interface ResidentialProject {
@@ -132,10 +131,10 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
                 <td className="py-4 px-4">{project.subcontractor}</td>
                 <td className="py-4 px-4">{project.notes}</td>
                 <td className="py-4 px-4">
-                  {project.start_date ? formatDateToCharlotte(project.start_date) : 'N/A'}
+                  {project.start_date ? new Date(project.start_date).toLocaleDateString() : 'N/A'}
                 </td>
                 <td className="py-4 px-4">
-                  {project.est_completion_date ? formatDateToCharlotte(project.est_completion_date) : 'N/A'}
+                  {project.est_completion_date ? new Date(project.est_completion_date).toLocaleDateString() : 'N/A'}
                 </td>
                 <td className="py-4 px-4">
                   {project.contract_value ? `$${Number(project.contract_value).toLocaleString()}` : 'N/A'}
