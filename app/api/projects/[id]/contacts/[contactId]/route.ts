@@ -1,119 +1,95 @@
 import { NextResponse } from 'next/server';
-const { getDb } = require('../../../../../../lib/db.js');
+import { getDb } from '../../../../../../lib/db';
 
 // PUT/UPDATE contact
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string, contactId: string } }
+  { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
-    const contactId = params.contactId;
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
+    const { contactId } = resolvedParams;
     
     // Validate IDs
     if (isNaN(projectId) || !contactId) {
-      return NextResponse.json(
-        { error: 'Invalid project ID or contact ID' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid project or contact ID' }, { status: 400 });
     }
-    
-    const data = await request.json();
-    
-    // Validate required fields
-    if (!data.title || !data.name) {
-      return NextResponse.json(
-        { error: 'Title and name are required' },
-        { status: 400 }
-      );
+
+    const body = await request.json();
+    const { name, phone, email } = body;
+
+    if (!name && !phone && !email) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
-    
+
     const db = await getDb();
-    
-    // Check if contact exists and belongs to the project
-    const existingContact = await db.get(
-      'SELECT * FROM project_contacts WHERE id = ? AND project_id = ?',
-      [contactId, projectId]
-    );
-    
+
+    // Check if contact exists
+    const existingContact = await db.get('SELECT * FROM project_contacts WHERE id = ? AND project_id = ?', [contactId, projectId]);
     if (!existingContact) {
-      return NextResponse.json(
-        { error: 'Contact not found for this project' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
-    
-    // Update contact
-    await db.run(
-      `UPDATE project_contacts
-       SET title = ?, name = ?, email = ?, phone = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND project_id = ?`,
-      [data.title, data.name, data.email || null, data.phone || null, contactId, projectId]
-    );
-    
-    // Get the updated contact
-    const updatedContact = await db.get(
-      'SELECT * FROM project_contacts WHERE id = ?',
-      [contactId]
-    );
-    
-    return NextResponse.json(updatedContact, { status: 200 });
+
+    const fieldsToUpdate = [];
+    const values = [];
+
+    if (name) {
+      fieldsToUpdate.push('name = ?');
+      values.push(name);
+    }
+    if (phone) {
+      fieldsToUpdate.push('phone = ?');
+      values.push(phone);
+    }
+    if (email) {
+      fieldsToUpdate.push('email = ?');
+      values.push(email);
+    }
+
+    values.push(contactId, projectId);
+
+    const sql = `UPDATE project_contacts SET ${fieldsToUpdate.join(', ')} WHERE id = ? AND project_id = ?`;
+
+    await db.run(sql, values);
+
+    const updatedContact = await db.get('SELECT * FROM project_contacts WHERE id = ?', [contactId]);
+
+    return NextResponse.json(updatedContact);
   } catch (error) {
-    console.error('Error updating project contact:', error);
-    return NextResponse.json(
-      { error: 'Failed to update project contact' },
-      { status: 500 }
-    );
+    console.error('Error updating contact:', error);
+    return NextResponse.json({ error: 'Failed to update contact' }, { status: 500 });
   }
 }
 
 // DELETE contact by ID
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string, contactId: string } }
+  { params }: { params: Promise<{ id: string; contactId: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
-    const contactId = params.contactId;
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
+    const { contactId } = resolvedParams;
     
     // Validate IDs
     if (isNaN(projectId) || !contactId) {
-      return NextResponse.json(
-        { error: 'Invalid project ID or contact ID' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid project or contact ID' }, { status: 400 });
     }
-    
+
     const db = await getDb();
-    
-    // Check if contact exists and belongs to the project
-    const existingContact = await db.get(
-      'SELECT * FROM project_contacts WHERE id = ? AND project_id = ?',
-      [contactId, projectId]
-    );
-    
+
+    // Check if contact exists
+    const existingContact = await db.get('SELECT * FROM project_contacts WHERE id = ? AND project_id = ?', [contactId, projectId]);
     if (!existingContact) {
-      return NextResponse.json(
-        { error: 'Contact not found for this project' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
-    
-    // Delete contact
-    await db.run(
-      'DELETE FROM project_contacts WHERE id = ? AND project_id = ?',
-      [contactId, projectId]
-    );
-    
-    return NextResponse.json(
-      { success: true, message: 'Contact deleted successfully' },
-      { status: 200 }
-    );
+
+    await db.run('DELETE FROM project_contacts WHERE id = ? AND project_id = ?', [contactId, projectId]);
+
+    return NextResponse.json({ message: 'Contact deleted successfully' });
   } catch (error) {
-    console.error('Error deleting project contact:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete project contact' },
-      { status: 500 }
-    );
+    console.error('Error deleting contact:', error);
+    return NextResponse.json({ error: 'Failed to delete contact' }, { status: 500 });
   }
 }

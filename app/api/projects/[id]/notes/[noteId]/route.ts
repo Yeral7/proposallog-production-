@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-const { getDb } = require('../../../../../../lib/db.js');
+import { getDb } from '../../../../../../lib/db';
 
 // DELETE note by ID
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string, noteId: string } }
+  { params }: { params: Promise<{ id: string, noteId: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
-    const noteId = params.noteId;
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
+    const noteId = resolvedParams.noteId;
     
     // Validate IDs
     if (isNaN(projectId) || !noteId) {

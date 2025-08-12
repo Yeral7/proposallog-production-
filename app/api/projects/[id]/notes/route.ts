@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-const { getDb } = require('../../../../../lib/db.js');
+import { getDb } from '../../../../../lib/db';
 
 // GET project notes
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
     
     // Validate project ID
     if (isNaN(projectId)) {
@@ -39,10 +40,11 @@ export async function GET(
 // POST new note
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
     
     // Validate project ID
     if (isNaN(projectId)) {
@@ -103,10 +105,11 @@ export async function POST(
 // DELETE note
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
     const { id: noteId } = await request.json();
 
     // Validate IDs

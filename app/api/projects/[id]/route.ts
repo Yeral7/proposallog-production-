@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-const { getDb } = require('../../../../lib/db.js');
+import { getDb } from '../../../../lib/db';
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+  const projectId = parseInt(resolvedParams.id);
     
     // Validate project ID
     if (isNaN(projectId)) {
@@ -80,9 +81,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+  const projectId = parseInt(resolvedParams.id);
     
     // Validate project ID
     if (isNaN(projectId)) {

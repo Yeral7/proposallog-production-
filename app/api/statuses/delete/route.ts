@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-const { getDb } = require('../../../../lib/db.js');
+import { getDb } from '../../../../lib/db';
 
 export async function DELETE(request) {
   try {

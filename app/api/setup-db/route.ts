@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-const { getDb } = require('../../../lib/db.js');
+import { getDb } from '../../../lib/db';
 
 // This endpoint will execute the SQL schema for project details tables
 export async function GET() {

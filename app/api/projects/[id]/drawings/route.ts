@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-const { getDb } = require('../../../../../lib/db.js');
+import { getDb } from '../../../../../lib/db';
 
 // GET project drawings
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
     if (isNaN(projectId)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
@@ -26,10 +27,11 @@ export async function GET(
 // POST new drawing
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
     if (isNaN(projectId)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
@@ -53,10 +55,11 @@ export async function POST(
 // PUT/UPDATE drawing
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
     if (isNaN(projectId)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
@@ -83,10 +86,11 @@ export async function PUT(
 // DELETE drawing
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
     const { id: drawingId } = await request.json();
     if (isNaN(projectId) || !drawingId) {
       return NextResponse.json({ error: 'Invalid project ID or drawing ID' }, { status: 400 });

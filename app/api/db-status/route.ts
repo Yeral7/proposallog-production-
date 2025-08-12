@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-const { getDb, resetDbConnection } = require('../../../lib/db.js');
+import { getDb, resetDbConnection } from '../../../lib/db';
 const path = require('path');
 const fs = require('fs');
 

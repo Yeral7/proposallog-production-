@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-const { getDb } = require('../../../../../lib/db.js');
+import { getDb } from '../../../../../lib/db';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const projectId = parseInt(params.id);
+    const resolvedParams = await params;
+    const projectId = parseInt(resolvedParams.id);
     
     if (isNaN(projectId)) {
       return NextResponse.json({ relatedProjects: [] }, { status: 200 });
