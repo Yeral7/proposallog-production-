@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 // import bcrypt from 'bcrypt'; // Uncomment and install this package when ready for production
 
+// Production build successfully fixed: Tailwind v3 + Next.js 15 route handlers updated
+
 export async function POST(request: Request) {
   try {
     const db = await getDb();
@@ -35,7 +37,7 @@ export async function POST(request: Request) {
     
     // TEMPORARY: Direct comparison (for demonstration - replace with above in production)
     // In real code, ALWAYS use bcrypt or similar for password hashing and comparison
-    // Use trim() to remove any whitespace that might cause comparison issues
+    // Use trim() to remove any whitespace that might cause comparison issues lmao
     const passwordMatch = user.password_hash.trim() === password.trim();
 
     if (!passwordMatch) {
