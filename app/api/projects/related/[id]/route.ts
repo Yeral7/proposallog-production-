@@ -13,15 +13,17 @@ export async function GET(
       return NextResponse.json({ relatedProjects: [] }, { status: 200 });
     }
 
-    const db = await getDb();
+    const supabase = getDb();
     
     // Get the current project's info
-    const currentProject = await db.get(`
-      SELECT p.*, b.name as builder_name 
-      FROM projects p 
-      JOIN builders b ON p.builder_id = b.id 
-      WHERE p.id = ?
-    `, [projectId]);
+    const { data: currentProject } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        builders:builder_id(name)
+      `)
+      .eq('id', projectId)
+      .single();
     
     if (!currentProject) {
       return NextResponse.json({ relatedProjects: [] }, { status: 200 });
@@ -29,23 +31,30 @@ export async function GET(
     
     // For testing purposes, let's create a simple mock implementation that returns other projects
     // from different builders with similar names
-    const mockRelatedProjects = await db.all(`
-      SELECT 
-        p.id,
-        p.project_name,
-        b.name as builder_name,
-        s.label as status_label
-      FROM projects p
-      JOIN builders b ON p.builder_id = b.id
-      JOIN statuses s ON p.status_id = s.id
-      WHERE p.id != ? AND b.id != ? 
-      LIMIT 3
-    `, [projectId, currentProject.builder_id]);
+    const { data: mockRelatedProjects } = await supabase
+      .from('projects')
+      .select(`
+        id,
+        project_name,
+        builders:builder_id(name),
+        statuses:status_id(label)
+      `)
+      .neq('id', projectId)
+      .neq('builder_id', currentProject.builder_id)
+      .limit(3);
+
+    // Transform the data to match expected format
+    const formattedRelatedProjects = (mockRelatedProjects || []).map((project: any) => ({
+      id: project.id,
+      project_name: project.project_name,
+      builder_name: project.builders?.name || 'N/A',
+      status_label: project.statuses?.label || 'N/A'
+    }));
     
-    console.log('Mock related projects:', mockRelatedProjects);
+    console.log('Mock related projects:', formattedRelatedProjects);
     
     return NextResponse.json({ 
-      relatedProjects: mockRelatedProjects 
+      relatedProjects: formattedRelatedProjects 
     }, { status: 200 });
     
   } catch (error) {

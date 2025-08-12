@@ -3,8 +3,9 @@ import { getDb } from '../../../lib/db';
 
 export async function GET() {
   try {
-    const db = await getDb();
-    const locations = await db.all('SELECT id, name FROM locations ORDER BY name');
+    const supabase = getDb();
+    const { data: locations, error } = await supabase.from('locations').select('id, name').order('name');
+    if (error) throw error;
     return NextResponse.json(locations);
   } catch (error) {
     console.error('Error fetching locations:', error);

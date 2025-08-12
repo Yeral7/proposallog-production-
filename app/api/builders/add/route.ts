@@ -13,13 +13,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const db = await getDb();
+    const supabase = getDb();
 
     // Check if builder with this name already exists
-    const existingBuilder = await db.get(
-      'SELECT id FROM builders WHERE name = ?',
-      [data.name]
-    );
+    const { data: existingBuilder } = await supabase
+      .from('builders')
+      .select('id')
+      .eq('name', data.name)
+      .single();
 
     if (existingBuilder) {
       return NextResponse.json(
@@ -28,10 +29,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await db.run(
-      'INSERT INTO builders (name) VALUES (?)',
-      [data.name]
-    );
+    const { data: result, error } = await supabase
+      .from('builders')
+      .insert({ name: data.name })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Database insert error:', error);
+      return NextResponse.json(
+        { error: 'Failed to create builder' },
+        { status: 500 }
+      );
+    }
     console.log('Database insert result:', result);
 
     return NextResponse.json({ 

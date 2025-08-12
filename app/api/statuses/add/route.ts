@@ -12,14 +12,23 @@ export async function POST(request) {
       );
     }
     
-    const db = await getDb();
-    const result = await db.run(
-      'INSERT INTO statuses (label) VALUES (?)',
-      [name.trim()]
-    );
+    const supabase = getDb();
+    const { data: result, error } = await supabase
+      .from('statuses')
+      .insert({ label: name.trim() })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Database insert error:', error);
+      return NextResponse.json(
+        { error: 'Failed to create status' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json({ 
-      id: result.lastID, 
+      id: result.id, 
       success: true 
     });
   } catch (error) {

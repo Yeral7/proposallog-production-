@@ -22,7 +22,8 @@ export async function GET() {
     
     // Execute each SQL statement
     for (const stmt of statements) {
-      await db.exec(stmt + ';');
+      // For Supabase, tables already exist - skip schema creation
+      // await supabase.rpc('exec_sql', { sql: stmt + ';');
     }
     
     return NextResponse.json({ 

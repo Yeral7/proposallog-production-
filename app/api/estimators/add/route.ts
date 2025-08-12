@@ -12,13 +12,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const db = await getDb();
+    const supabase = getDb();
     
     // Check if estimator with this name already exists
-    const existingEstimator = await db.get(
-      'SELECT id FROM estimators WHERE name = ?',
-      [data.name]
-    );
+    const { data: existingEstimator } = await supabase
+      .from('estimators')
+      .select('id')
+      .eq('name', data.name)
+      .single();
     
     if (existingEstimator) {
       return NextResponse.json(
@@ -27,10 +28,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await db.run(
-      'INSERT INTO estimators (name) VALUES (?)',
-      [data.name]
-    );
+    const { data: result, error } = await supabase
+      .from('estimators')
+      .insert({ name: data.name })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Database insert error:', error);
+      return NextResponse.json(
+        { error: 'Failed to create estimator' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json({ 
       success: true,

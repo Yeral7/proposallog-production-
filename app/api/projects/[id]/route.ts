@@ -15,7 +15,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     const data = await request.json();
-    const db = await getDb();
+    const supabase = getDb();
     
     // Correctly validate only the fields that are always required.
     // Optional fields like due_date, contract_value, supervisor_id, and location_id can be null.
@@ -27,7 +27,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     // Check if project exists
-    const existingProject = await db.get('SELECT id FROM projects WHERE id = ?', [projectId]);
+    const { data: existingProject } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .single();
+      
     if (!existingProject) {
       return NextResponse.json(
         { error: 'Project not found' },
@@ -36,35 +41,32 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     // Update project
-    const result = await db.run(
-      `UPDATE projects SET 
-        project_name = ?, 
-        builder_id = ?, 
-        estimator_id = ?, 
-        supervisor_id = ?, 
-        status_id = ?, 
-        location_id = ?, 
-        due_date = ?, 
-        submission_date = ?,
-        follow_up_date = ?,
-        contract_value = ?,
-        priority = ?
-      WHERE id = ?`,
-      [
-        data.project_name,
-        data.builder_id,
-        data.estimator_id,
-        data.supervisor_id,
-        data.status_id,
-        data.location_id,
-        data.due_date,
-        data.submission_date,
-        data.follow_up_date,
-        data.contract_value,
-        data.priority,
-        projectId
-      ]
-    );
+    const { data: result, error } = await supabase
+      .from('projects')
+      .update({
+        project_name: data.project_name,
+        builder_id: data.builder_id,
+        estimator_id: data.estimator_id,
+        supervisor_id: data.supervisor_id,
+        status_id: data.status_id,
+        location_id: data.location_id,
+        due_date: data.due_date,
+        submission_date: data.submission_date,
+        follow_up_date: data.follow_up_date,
+        contract_value: data.contract_value,
+        priority: data.priority
+      })
+      .eq('id', projectId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating project:', error);
+      return NextResponse.json(
+        { error: 'Failed to update project' },
+        { status: 500 }
+      );
+    }
 
     // Division associations removed
 
@@ -94,10 +96,15 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       );
     }
 
-    const db = await getDb();
+    const supabase = getDb();
 
     // Check if project exists
-    const existingProject = await db.get('SELECT id FROM projects WHERE id = ?', [projectId]);
+    const { data: existingProject } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .single();
+      
     if (!existingProject) {
       return NextResponse.json(
         { error: 'Project not found' },
@@ -108,7 +115,18 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     // Division association deletion removed
 
     // Then delete the project
-    await db.run('DELETE FROM projects WHERE id = ?', [projectId]);
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', projectId);
+
+    if (error) {
+      console.error('Error deleting project:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete project' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ 
       success: true 

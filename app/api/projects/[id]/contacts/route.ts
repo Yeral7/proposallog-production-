@@ -18,15 +18,24 @@ export async function GET(
       );
     }
     
-    const db = await getDb();
+    const supabase = getDb();
     
-    // Get all contacts for the project
-    const contacts = await db.all(
-      `SELECT * FROM project_contacts WHERE project_id = ? ORDER BY created_at ASC`,
-      [projectId]
-    );
+    // Get all contacts for the project using Supabase
+    const { data: contacts, error } = await supabase
+      .from('project_contacts')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true });
     
-    return NextResponse.json(contacts, { status: 200 });
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json(
+        { error: 'Failed to fetch project contacts' },
+        { status: 500 }
+      );
+    }
+    
+    return NextResponse.json(contacts || [], { status: 200 });
   } catch (error) {
     console.error('Error fetching project contacts:', error);
     return NextResponse.json(
@@ -63,10 +72,15 @@ export async function POST(
       );
     }
     
-    const db = await getDb();
+    const supabase = getDb();
     
     // Check if project exists
-    const existingProject = await db.get('SELECT id FROM projects WHERE id = ?', [projectId]);
+    const { data: existingProject } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .single();
+    
     if (!existingProject) {
       return NextResponse.json(
         { error: 'Project not found' },
@@ -75,12 +89,12 @@ export async function POST(
     }
     
     // Check if we already have 3 contacts for this project
-    const contactCount = await db.get(
-      'SELECT COUNT(*) as count FROM project_contacts WHERE project_id = ?',
-      [projectId]
-    );
+    const { count } = await supabase
+      .from('project_contacts')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', projectId);
     
-    if (contactCount.count >= 3) {
+    if (count && count >= 3) {
       return NextResponse.json(
         { error: 'Project already has the maximum of 3 contacts' },
         { status: 400 }
@@ -88,22 +102,27 @@ export async function POST(
     }
     
     // Insert new contact
-    const result = await db.run(
-      `INSERT INTO project_contacts (project_id, title, name, email, phone)
-       VALUES (?, ?, ?, ?, ?)`,
-      [projectId, data.title || null, data.name, data.email || null, data.phone || null]
-    );
+    const { data: newContact, error } = await supabase
+      .from('project_contacts')
+      .insert({
+        project_id: projectId,
+        title: data.title || null,
+        name: data.name,
+        email: data.email || null,
+        phone: data.phone || null
+      })
+      .select()
+      .single();
     
-    // Get the inserted contact
-    const newContact = await db.get(
-      'SELECT * FROM project_contacts WHERE id = ?',
-      [result.lastID]
-    );
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json(
+        { error: 'Failed to create project contact' },
+        { status: 500 }
+      );
+    }
     
-    return NextResponse.json(
-      newContact,
-      { status: 201 }
-    );
+    return NextResponse.json(newContact, { status: 201 });
   } catch (error) {
     console.error('Error creating project contact:', error);
     return NextResponse.json(
@@ -140,13 +159,15 @@ export async function PUT(
       );
     }
     
-    const db = await getDb();
+    const supabase = getDb();
     
     // Check if contact exists and belongs to the project
-    const existingContact = await db.get(
-      'SELECT * FROM project_contacts WHERE id = ? AND project_id = ?',
-      [data.id, projectId]
-    );
+    const { data: existingContact } = await supabase
+      .from('project_contacts')
+      .select('*')
+      .eq('id', data.id)
+      .eq('project_id', projectId)
+      .single();
     
     if (!existingContact) {
       return NextResponse.json(
@@ -156,18 +177,27 @@ export async function PUT(
     }
     
     // Update contact
-    await db.run(
-      `UPDATE project_contacts
-       SET title = ?, name = ?, email = ?, phone = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND project_id = ?`,
-      [data.title || null, data.name, data.email || null, data.phone || null, data.id, projectId]
-    );
-    
-    // Get the updated contact
-    const updatedContact = await db.get(
-      'SELECT * FROM project_contacts WHERE id = ?',
-      [data.id]
-    );
+    const { data: updatedContact, error } = await supabase
+      .from('project_contacts')
+      .update({
+        title: data.title || null,
+        name: data.name,
+        email: data.email || null,
+        phone: data.phone || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', data.id)
+      .eq('project_id', projectId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating contact:', error);
+      return NextResponse.json(
+        { error: 'Failed to update contact' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json(updatedContact, { status: 200 });
   } catch (error) {
@@ -197,13 +227,15 @@ export async function DELETE(
       );
     }
 
-    const db = await getDb();
+    const supabase = getDb();
 
     // Check if contact exists and belongs to the project
-    const existingContact = await db.get(
-      'SELECT * FROM project_contacts WHERE id = ? AND project_id = ?',
-      [contactId, projectId]
-    );
+    const { data: existingContact } = await supabase
+      .from('project_contacts')
+      .select('*')
+      .eq('id', contactId)
+      .eq('project_id', projectId)
+      .single();
 
     if (!existingContact) {
       return NextResponse.json(
@@ -213,10 +245,19 @@ export async function DELETE(
     }
 
     // Delete contact
-    await db.run(
-      'DELETE FROM project_contacts WHERE id = ? AND project_id = ?',
-      [contactId, projectId]
-    );
+    const { error } = await supabase
+      .from('project_contacts')
+      .delete()
+      .eq('id', contactId)
+      .eq('project_id', projectId);
+
+    if (error) {
+      console.error('Error deleting contact:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete contact' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(
       { success: true, message: 'Contact deleted successfully' },

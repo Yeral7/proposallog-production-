@@ -6,7 +6,7 @@ import { getDb } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
-    const db = await getDb();
+    const supabase = getDb();
     const body = await request.json();
     const { username, password } = body;
 
@@ -19,12 +19,13 @@ export async function POST(request: Request) {
     }
 
     // Check if username exists - use case-insensitive comparison
-    const user = await db.get(
-      'SELECT id, username, password_hash FROM auth_users WHERE LOWER(username) = LOWER(?)',
-      [username.trim()]
-    );
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, name, email, password_hash')
+      .ilike('name', username.trim())
+      .single();
     
-    if (!user) {
+    if (error || !user) {
       // Use generic error message to prevent username enumeration
       return NextResponse.json(
         { error: 'Invalid username or password' }, 
@@ -37,8 +38,8 @@ export async function POST(request: Request) {
     
     // TEMPORARY: Direct comparison (for demonstration - replace with above in production)
     // In real code, ALWAYS use bcrypt or similar for password hashing and comparison
-    // Use trim() to remove any whitespace that might cause comparison issues lmao
-    const passwordMatch = user.password_hash.trim() === password.trim();
+    // Use trim() to remove any whitespace that might cause comparison issues
+    const passwordMatch = user.password_hash?.trim() === password.trim();
 
     if (!passwordMatch) {
       return NextResponse.json(
@@ -47,11 +48,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update last login timestamp
-    await db.run(
-      'UPDATE auth_users SET last_login = datetime("now") WHERE id = ?',
-      [user.id]
-    );
+    // Update last login timestamp (if you have this field)
+    await supabase
+      .from('users')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', user.id);
 
     // In a real implementation, generate JWT or session token here
     // For now, just return success with user info (minus password)
@@ -59,7 +60,8 @@ export async function POST(request: Request) {
       success: true,
       user: {
         id: user.id,
-        username: user.username
+        username: user.name,
+        email: user.email
       }
     });
 

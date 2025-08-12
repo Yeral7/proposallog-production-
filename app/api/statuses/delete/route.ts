@@ -13,8 +13,20 @@ export async function DELETE(request) {
       );
     }
     
-    const db = await getDb();
-    await db.run('DELETE FROM statuses WHERE id = ?', [id]);
+    const supabase = getDb();
+    
+    const { error } = await supabase
+      .from('statuses')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting status:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete status' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json({ success: true });
   } catch (error) {

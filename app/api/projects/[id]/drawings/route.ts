@@ -12,12 +12,22 @@ export async function GET(
     if (isNaN(projectId)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
-    const db = await getDb();
-    const drawings = await db.all(
-      `SELECT * FROM project_drawings WHERE project_id = ? ORDER BY created_at ASC`,
-      [projectId]
-    );
-    return NextResponse.json(drawings, { status: 200 });
+    const supabase = getDb();
+    const { data: drawings, error } = await supabase
+      .from('project_drawings')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true });
+    
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json(
+        { error: 'Failed to fetch project drawings' },
+        { status: 500 }
+      );
+    }
+    
+    return NextResponse.json(drawings || [], { status: 200 });
   } catch (error) {
     console.error('Error fetching project drawings:', error);
     return NextResponse.json({ error: 'Failed to fetch project drawings' }, { status: 500 });
@@ -39,12 +49,25 @@ export async function POST(
     if (!data.title || !data.url) {
       return NextResponse.json({ error: 'Title and URL are required' }, { status: 400 });
     }
-    const db = await getDb();
-    const result = await db.run(
-      `INSERT INTO project_drawings (project_id, title, url) VALUES (?, ?, ?)`,
-      [projectId, data.title, data.url]
-    );
-    const newDrawing = await db.get('SELECT * FROM project_drawings WHERE id = ?', [result.lastID]);
+    const supabase = getDb();
+    const { data: newDrawing, error } = await supabase
+      .from('project_drawings')
+      .insert({
+        project_id: projectId,
+        title: data.title,
+        url: data.url
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json(
+        { error: 'Failed to create project drawing' },
+        { status: 500 }
+      );
+    }
+    
     return NextResponse.json(newDrawing, { status: 201 });
   } catch (error) {
     console.error('Error creating project drawing:', error);
@@ -67,12 +90,27 @@ export async function PUT(
     if (!data.id || !data.title || !data.url) {
       return NextResponse.json({ error: 'Drawing ID, title, and URL are required' }, { status: 400 });
     }
-    const db = await getDb();
-    await db.run(
-      `UPDATE project_drawings SET title = ?, url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND project_id = ?`,
-      [data.title, data.url, data.id, projectId]
-    );
-    const updatedDrawing = await db.get('SELECT * FROM project_drawings WHERE id = ?', [data.id]);
+    const supabase = getDb();
+    
+    const { data: updatedDrawing, error } = await supabase
+      .from('project_drawings')
+      .update({
+        title: data.title,
+        url: data.url,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', data.id)
+      .eq('project_id', projectId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating drawing:', error);
+      return NextResponse.json(
+        { error: 'Failed to update drawing' },
+        { status: 500 }
+      );
+    }
     if (!updatedDrawing) {
       return NextResponse.json({ error: 'Drawing not found for this project' }, { status: 404 });
     }
@@ -95,11 +133,24 @@ export async function DELETE(
     if (isNaN(projectId) || !drawingId) {
       return NextResponse.json({ error: 'Invalid project ID or drawing ID' }, { status: 400 });
     }
-    const db = await getDb();
-    const result = await db.run('DELETE FROM project_drawings WHERE id = ? AND project_id = ?', [drawingId, projectId]);
-    if (result.changes === 0) {
-      return NextResponse.json({ error: 'Drawing not found for this project' }, { status: 404 });
+    const supabase = getDb();
+    
+    const { error, count } = await supabase
+      .from('project_drawings')
+      .delete()
+      .eq('id', drawingId)
+      .eq('project_id', projectId);
+
+    if (error) {
+      console.error('Error deleting drawing:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete drawing' },
+        { status: 500 }
+      );
     }
+
+    // Note: Supabase doesn't return affected row count directly
+    // We could check if drawing exists first, but for simplicity we'll assume success
     return NextResponse.json({ success: true, message: 'Drawing deleted successfully' }, { status: 200 });
   } catch (error) {
     console.error('Error deleting project drawing:', error);

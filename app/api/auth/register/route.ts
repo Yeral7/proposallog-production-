@@ -3,7 +3,7 @@ import { getDb } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
-    const db = await getDb();
+    const supabase = getDb();
     const body = await request.json();
     const { username, password, email, fullName } = body;
 
@@ -35,10 +35,11 @@ export async function POST(request: Request) {
     }
 
     // Check if username already exists
-    const existingUser = await db.get(
-      'SELECT id FROM auth_users WHERE username = ?',
-      [username]
-    );
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', username)
+      .single();
 
     if (existingUser) {
       return NextResponse.json(
@@ -55,24 +56,29 @@ export async function POST(request: Request) {
     const hashedPassword = password;
 
     // Insert the new user
-    const result = await db.run(
-      `INSERT INTO auth_users (
-        username, password_hash, email, full_name, created_at
-      ) VALUES (?, ?, ?, ?, datetime('now'))`,
-      [username, hashedPassword, email || null, fullName || null]
-    );
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert({
+        name: username,
+        password_hash: hashedPassword,
+        email: email || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
 
-    // Add default 'user' role
-    if (result.lastID) {
-      await db.run(
-        'INSERT INTO user_roles (user_id, role_id) VALUES (?, (SELECT id FROM roles WHERE name = "user"))',
-        [result.lastID]
+    if (error) {
+      console.error('User creation error:', error);
+      return NextResponse.json(
+        { error: 'Registration failed' }, 
+        { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      userId: result.lastID
+      userId: newUser.id
     });
 
   } catch (error) {

@@ -12,13 +12,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const db = await getDb();
+    const supabase = getDb();
     
     // Check if location with this name already exists
-    const existingLocation = await db.get(
-      'SELECT id FROM locations WHERE name = ?',
-      [data.name]
-    );
+    const { data: existingLocation } = await supabase
+      .from('locations')
+      .select('id')
+      .eq('name', data.name)
+      .single();
     
     if (existingLocation) {
       return NextResponse.json(
@@ -27,10 +28,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await db.run(
-      'INSERT INTO locations (name) VALUES (?)',
-      [data.name]
-    );
+    const { data: result, error } = await supabase
+      .from('locations')
+      .insert({ name: data.name })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Database insert error:', error);
+      return NextResponse.json(
+        { error: 'Failed to create location' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json({ 
       success: true,

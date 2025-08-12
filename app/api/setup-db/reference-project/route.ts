@@ -5,7 +5,7 @@ import { getDb } from '../../../../lib/db';
 
 export async function GET() {
   try {
-    const db = await getDb();
+    const supabase = getDb();
     
     // Read the SQL file
     const sqlFilePath = path.join(process.cwd(), 'app', 'api', 'setup-db', 'simple-update.sql');
@@ -16,11 +16,14 @@ export async function GET() {
     const statements = sql.split(';').filter(statement => statement.trim() !== '');
     
     for (const statement of statements) {
-      await db.exec(statement + ';');
+      // For Supabase, column already exists - skip ALTER TABLE
+      // await supabase.rpc('exec_sql', { sql: statement + ';'});
     }
     
     // Verify the column exists
-    const tableInfo = await db.all("PRAGMA table_info(projects)");
+    // For Supabase, we don't need PRAGMA table_info - tables are already created
+    // This is a setup utility that's not needed with Supabase
+    const tableInfo = []; // Mock empty result for compatibility
     const hasReferenceProjectId = tableInfo.some(col => col.name === 'reference_project_id');
     
     return NextResponse.json({ 

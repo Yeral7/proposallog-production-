@@ -3,8 +3,9 @@ import { getDb } from '../../../lib/db';
 
 export async function GET() {
   try {
-    const db = await getDb();
-    const supervisors = await db.all('SELECT * FROM supervisors ORDER BY name');
+    const supabase = getDb();
+    const { data: supervisors, error } = await supabase.from('supervisors').select('*').order('name');
+    if (error) throw error;
     return NextResponse.json(supervisors);
   } catch (error) {
     console.error('Error fetching supervisors:', error);
@@ -26,15 +27,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const db = await getDb();
-    const result = await db.run(
-      'INSERT INTO supervisors (name) VALUES (?)',
-      [name]
-    );
+    const supabase = getDb();
+    const { data: result, error } = await supabase
+      .from('supervisors')
+      .insert({ name })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Database insert error:', error);
+      return NextResponse.json(
+        { error: 'Failed to create supervisor' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json({ 
-      id: result.lastID,
-      name 
+      id: result.id,
+      name: result.name 
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating supervisor:', error);
@@ -57,25 +67,41 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const db = await getDb();
+    const supabase = getDb();
     
     // Check if any projects are using this supervisor
-    const projects = await db.all(
-      'SELECT COUNT(*) as count FROM projects WHERE supervisor_id = ?',
-      [id]
-    );
+    const { count, error: countError } = await supabase
+      .from('projects')
+      .select('*', { count: 'exact', head: true })
+      .eq('supervisor_id', id);
+
+    if (countError) {
+      console.error('Error checking supervisor usage:', countError);
+      return NextResponse.json(
+        { error: 'Failed to check supervisor usage' },
+        { status: 500 }
+      );
+    }
     
-    if (projects[0].count > 0) {
+    if (count && count > 0) {
       return NextResponse.json(
         { error: 'Cannot delete supervisor that is assigned to projects' },
         { status: 400 }
       );
     }
     
-    await db.run(
-      'DELETE FROM supervisors WHERE id = ?',
-      [id]
-    );
+    const { error } = await supabase
+      .from('supervisors')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting supervisor:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete supervisor' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json({ success: true });
   } catch (error) {

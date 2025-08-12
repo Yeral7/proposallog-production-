@@ -17,10 +17,15 @@ export async function GET() {
       // Reset connection if it was previously failed
       resetDbConnection();
       
-      const db = await getDb();
+      const supabase = getDb();
       // Try a simple query to ensure connection works
-      const result = await db.get('SELECT 1 as test');
-      connectionSuccess = result && result.test === 1;
+      // Test Supabase connection with a simple query
+      const { data: result, error } = await supabase
+        .from('projects')
+        .select('id', { count: 'exact', head: true });
+      
+      if (error) throw error;
+      connectionSuccess = true; // If no error, connection is successful
     } catch (err) {
       error = err.message || String(err);
     }

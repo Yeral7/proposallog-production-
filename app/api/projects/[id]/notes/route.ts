@@ -18,16 +18,33 @@ export async function GET(
       );
     }
     
-    const db = await getDb();
+    const supabase = getDb();
     
     // Get all notes for the project, ordered by newest first
-    const notes = await db.all(
-      `SELECT id, project_id, content as note_text, author, timestamp as created_at 
-       FROM project_notes WHERE project_id = ? ORDER BY timestamp DESC`,
-      [projectId]
-    );
+    const { data: notes, error } = await supabase
+      .from('project_notes')
+      .select('id, project_id, content, author, timestamp')
+      .eq('project_id', projectId)
+      .order('timestamp', { ascending: false });
     
-    return NextResponse.json(notes, { status: 200 });
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json(
+        { error: 'Failed to fetch project notes' },
+        { status: 500 }
+      );
+    }
+    
+    // Transform data to match expected format
+    const transformedNotes = (notes || []).map(note => ({
+      id: note.id,
+      project_id: note.project_id,
+      note_text: note.content,
+      author: note.author,
+      created_at: note.timestamp
+    }));
+    
+    return NextResponse.json(transformedNotes, { status: 200 });
   } catch (error) {
     console.error('Error fetching project notes:', error);
     return NextResponse.json(
@@ -64,10 +81,15 @@ export async function POST(
       );
     }
     
-    const db = await getDb();
+    const supabase = getDb();
     
     // Check if project exists
-    const existingProject = await db.get('SELECT id FROM projects WHERE id = ?', [projectId]);
+    const { data: existingProject } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .single();
+      
     if (!existingProject) {
       return NextResponse.json(
         { error: 'Project not found' },
@@ -76,18 +98,31 @@ export async function POST(
     }
     
     // Insert new note
-    const result = await db.run(
-      `INSERT INTO project_notes (project_id, content, author)
-       VALUES (?, ?, ?)`,
-      [projectId, data.note_text, data.author]
-    );
+    const { data: result, error } = await supabase
+      .from('project_notes')
+      .insert({
+        project_id: projectId,
+        content: data.note_text,
+        author: data.author
+      })
+      .select(`
+        id, 
+        project_id, 
+        content as note_text, 
+        author, 
+        timestamp as created_at
+      `)
+      .single();
+
+    if (error) {
+      console.error('Error creating note:', error);
+      return NextResponse.json(
+        { error: 'Failed to create note' },
+        { status: 500 }
+      );
+    }
     
-    // Get the inserted note, aliasing columns to match the GET request for consistency
-    const newNote = await db.get(
-      `SELECT id, project_id, content as note_text, author, timestamp as created_at 
-       FROM project_notes WHERE id = ?`,
-      [result.lastID]
-    );
+    const newNote = result;
     
     return NextResponse.json(
       newNote,
@@ -120,13 +155,15 @@ export async function DELETE(
       );
     }
 
-    const db = await getDb();
+    const supabase = getDb();
 
     // Check if note exists and belongs to the project
-    const existingNote = await db.get(
-      'SELECT * FROM project_notes WHERE id = ? AND project_id = ?',
-      [noteId, projectId]
-    );
+    const { data: existingNote } = await supabase
+      .from('project_notes')
+      .select('*')
+      .eq('id', noteId)
+      .eq('project_id', projectId)
+      .single();
 
     if (!existingNote) {
       return NextResponse.json(
@@ -136,10 +173,19 @@ export async function DELETE(
     }
 
     // Delete note
-    await db.run(
-      'DELETE FROM project_notes WHERE id = ? AND project_id = ?',
-      [noteId, projectId]
-    );
+    const { error } = await supabase
+      .from('project_notes')
+      .delete()
+      .eq('id', noteId)
+      .eq('project_id', projectId);
+
+    if (error) {
+      console.error('Error deleting note:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete note' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(
       { success: true, message: 'Note deleted successfully' },

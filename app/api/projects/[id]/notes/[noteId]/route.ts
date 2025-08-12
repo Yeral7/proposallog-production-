@@ -19,13 +19,15 @@ export async function DELETE(
       );
     }
     
-    const db = await getDb();
+    const supabase = getDb();
     
     // Check if note exists and belongs to the project
-    const existingNote = await db.get(
-      'SELECT * FROM project_notes WHERE id = ? AND project_id = ?',
-      [noteId, projectId]
-    );
+    const { data: existingNote } = await supabase
+      .from('project_notes')
+      .select('*')
+      .eq('id', noteId)
+      .eq('project_id', projectId)
+      .single();
     
     if (!existingNote) {
       return NextResponse.json(
@@ -35,10 +37,19 @@ export async function DELETE(
     }
     
     // Delete note
-    await db.run(
-      'DELETE FROM project_notes WHERE id = ? AND project_id = ?',
-      [noteId, projectId]
-    );
+    const { error } = await supabase
+      .from('project_notes')
+      .delete()
+      .eq('id', noteId)
+      .eq('project_id', projectId);
+
+    if (error) {
+      console.error('Error deleting note:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete note' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json(
       { success: true, message: 'Note deleted successfully' },

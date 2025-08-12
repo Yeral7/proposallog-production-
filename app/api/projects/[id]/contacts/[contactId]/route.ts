@@ -17,16 +17,21 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, phone, email } = body;
+    const { name, phone, email, role, company } = body;
 
     if (!name && !phone && !email) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
-    const db = await getDb();
+    const supabase = getDb();
 
     // Check if contact exists
-    const existingContact = await db.get('SELECT * FROM project_contacts WHERE id = ? AND project_id = ?', [contactId, projectId]);
+    const { data: existingContact } = await supabase
+      .from('project_contacts')
+      .select('*')
+      .eq('id', contactId)
+      .eq('project_id', projectId)
+      .single();
     if (!existingContact) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
@@ -51,9 +56,29 @@ export async function PUT(
 
     const sql = `UPDATE project_contacts SET ${fieldsToUpdate.join(', ')} WHERE id = ? AND project_id = ?`;
 
-    await db.run(sql, values);
+    // Build update object
+    const updateData: any = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (phone) updateData.phone = phone;
+    if (role) updateData.role = role;
+    if (company) updateData.company = company;
 
-    const updatedContact = await db.get('SELECT * FROM project_contacts WHERE id = ?', [contactId]);
+    const { data: updatedContact, error } = await supabase
+      .from('project_contacts')
+      .update(updateData)
+      .eq('id', contactId)
+      .eq('project_id', projectId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating contact:', error);
+      return NextResponse.json(
+        { error: 'Failed to update contact' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(updatedContact);
   } catch (error) {
@@ -77,15 +102,33 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid project or contact ID' }, { status: 400 });
     }
 
-    const db = await getDb();
+    const supabase = getDb();
 
     // Check if contact exists
-    const existingContact = await db.get('SELECT * FROM project_contacts WHERE id = ? AND project_id = ?', [contactId, projectId]);
+    const { data: existingContact } = await supabase
+      .from('project_contacts')
+      .select('*')
+      .eq('id', contactId)
+      .eq('project_id', projectId)
+      .single();
+      
     if (!existingContact) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
 
-    await db.run('DELETE FROM project_contacts WHERE id = ? AND project_id = ?', [contactId, projectId]);
+    const { error } = await supabase
+      .from('project_contacts')
+      .delete()
+      .eq('id', contactId)
+      .eq('project_id', projectId);
+
+    if (error) {
+      console.error('Error deleting contact:', error);
+      return NextResponse.json(
+        { error: 'Failed to delete contact' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ message: 'Contact deleted successfully' });
   } catch (error) {
