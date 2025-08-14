@@ -105,13 +105,7 @@ export async function POST(
         content: data.note_text,
         author: data.author
       })
-      .select(`
-        id, 
-        project_id, 
-        content as note_text, 
-        author, 
-        timestamp as created_at
-      `)
+      .select('id, project_id, content, author, timestamp')
       .single();
 
     if (error) {
@@ -122,7 +116,14 @@ export async function POST(
       );
     }
     
-    const newNote = result;
+    // Transform the result to match expected format
+    const newNote = {
+      id: result.id,
+      project_id: result.project_id,
+      note_text: result.content,
+      author: result.author,
+      created_at: result.timestamp || new Date().toISOString()
+    };
     
     return NextResponse.json(
       newNote,

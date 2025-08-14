@@ -13,6 +13,10 @@ import {
   HiUserGroup,
   HiClipboardCheck
 } from 'react-icons/hi';
+import Header from '../../components/Header';
+import Banner from '../../components/Banner';
+import ProtectedRoute from '../../components/ProtectedRoute';
+import { fetchWithAuth } from '@/lib/apiClient';
 import { 
   PieChart, 
   Pie, 
@@ -72,13 +76,13 @@ const AnalyticsPage = () => {
       setLoading(true);
       try {
         // Fetch projects
-        const projectsRes = await fetch('/api/projects');
+        const projectsRes = await fetchWithAuth('/api/projects');
         if (!projectsRes.ok) throw new Error('Failed to fetch projects');
         const projectsData = await projectsRes.json();
         setProjects(projectsData);
         
         // Fetch statuses
-        const statusesRes = await fetch('/api/statuses');
+        const statusesRes = await fetchWithAuth('/api/statuses');
         if (!statusesRes.ok) throw new Error('Failed to fetch statuses');
         const statusesData = await statusesRes.json();
         setStatuses(statusesData);

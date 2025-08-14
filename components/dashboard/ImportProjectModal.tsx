@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HiX, HiUpload } from 'react-icons/hi';
+import { fetchWithAuth } from '@/lib/apiClient';
 
 // Import interfaces from the proposal table
 import { Project } from './ProposalTable';
@@ -9,7 +10,7 @@ import { Project } from './ProposalTable';
 interface ImportProjectModalProps {
   isVisible: boolean;
   onClose: () => void;
-  onProjectImported: () => void;
+  onProjectImported: (projectName?: string) => void;
   initialProjectData?: any;
 }
 
@@ -182,11 +183,8 @@ export default function ImportProjectModal({
                     // Send the project data to the API
                     const projectData = validationResult.project!;
                     
-                    const response = await fetch('/api/projects', {
+                    const response = await fetchWithAuth('/api/projects', {
                       method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
                       body: JSON.stringify(projectData),
                     });
                     
@@ -208,7 +206,7 @@ export default function ImportProjectModal({
                       throw new Error(errorMessage);
                     }
                     
-                    onProjectImported();
+                    onProjectImported(projectData.project_name);
                     onClose();
                   } catch (err) {
                     console.error('Error importing project:', err);

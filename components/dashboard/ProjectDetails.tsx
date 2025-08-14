@@ -5,6 +5,10 @@ import { Project } from './ProposalTable';
 import { HiPlus, HiPencil, HiX, HiPhone, HiClipboard, HiMail, HiEye, HiDocumentText } from "react-icons/hi";
 import ConfirmationDialog from "../common/ConfirmationDialog";
 import CallConfirmationDialog from "../common/CallConfirmationDialog";
+import { useAuth } from '../../contexts/AuthContext';
+import { fetchWithAuth } from '@/lib/apiClient';
+import { logClientAuditAction } from '@/lib/clientAuditLogger';
+import { formatDateTimeToCharlotte, formatDateToCharlotte } from '@/lib/timezone';
 
 // Interfaces
 interface Contact {
@@ -34,6 +38,8 @@ interface ProjectDetailsProps {
 }
 
 const ProjectDetails = ({ project }: ProjectDetailsProps) => {
+  const { canEditProjects } = useAuth();
+  
   // Main State
   const [activeTab, setActiveTab] = useState<'contacts' | 'drawings' | 'notes'>('contacts');
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -75,7 +81,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
     // Fetch contacts from API
     const fetchContacts = async () => {
       try {
-        const response = await fetch(`/api/projects/${project.id}/contacts`);
+        const response = await fetchWithAuth(`/api/projects/${project.id}/contacts`);
         if (response.ok) {
           const data = await response.json();
           setContacts(data.map(contact => ({
@@ -96,13 +102,13 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
     // Fetch notes from API
     const fetchNotes = async () => {
       try {
-        const response = await fetch(`/api/projects/${project.id}/notes`);
+        const response = await fetchWithAuth(`/api/projects/${project.id}/notes`);
         if (response.ok) {
           const data = await response.json();
           setNotes(data.map(note => ({
             id: note.id.toString(),
             text: note.note_text,
-            date: note.created_at,
+            date: note.created_at || new Date().toISOString(),
             author: note.author
           })));
         } else {
@@ -116,14 +122,14 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
     // Fetch drawings from API
     const fetchDrawings = async () => {
       try {
-        const response = await fetch(`/api/projects/${project.id}/drawings`);
+        const response = await fetchWithAuth(`/api/projects/${project.id}/drawings`);
         if (response.ok) {
           const data = await response.json();
           setDrawings(data.map(drawing => ({
             id: drawing.id.toString(),
             title: drawing.title,
             url: drawing.url,
-            date: drawing.created_at
+            date: drawing.created_at || new Date().toISOString()
           })));
         } else {
           console.error('Failed to fetch drawings');
@@ -164,22 +170,26 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
       let updatedContact;
       if (isEditMode && currentContact.id) {
         // Update existing contact
-        const response = await fetch(`/api/projects/${project.id}/contacts`,
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(currentContact),
-          }
-        );
+        const response = await fetchWithAuth(`/api/projects/${project.id}/contacts/${currentContact.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentContact),
+        });
         if (!response.ok) {
           const err = await response.json();
           throw new Error(err.error || 'Failed to update contact');
         }
         updatedContact = await response.json();
         setContacts(contacts.map(c => (c.id === updatedContact.id.toString() ? { ...updatedContact, id: updatedContact.id.toString() } : c)));
+        
+        // Log audit action
+        await logClientAuditAction({
+          page: 'Project Details',
+          action: `Updated contact: "${currentContact.name}" in project "${project.project_name}"`
+        });
       } else {
         // Create new contact
-        const response = await fetch(`/api/projects/${project.id}/contacts`, {
+        const response = await fetchWithAuth(`/api/projects/${project.id}/contacts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -195,6 +205,12 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
         }
         updatedContact = await response.json();
         setContacts([...contacts, { ...updatedContact, id: updatedContact.id.toString() }]);
+        
+        // Log audit action
+        await logClientAuditAction({
+          page: 'Project Details',
+          action: `Added contact: "${currentContact.name}" to project "${project.project_name}"`
+        });
       }
       setShowContactDialog(false);
     } catch (err) {
@@ -278,9 +294,8 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
     setError('');
 
     try {
-      const response = await fetch(`/api/projects/${project.id}/notes`, {
+      const response = await fetchWithAuth(`/api/projects/${project.id}/notes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           note_text: currentNote.text,
           author: 'Admin' // Replace with actual user later
@@ -288,8 +303,17 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to save note');
+        console.error('Note save failed:', response.status, response.statusText);
+        let errorMessage = 'Failed to save note';
+        try {
+          const err = await response.json();
+          errorMessage = err.error || errorMessage;
+          console.error('API Error Response:', err);
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const newNoteFromApi = await response.json();
@@ -297,12 +321,28 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
       const newNote: Note = {
         id: newNoteFromApi.id.toString(),
         text: newNoteFromApi.note_text,
-        date: newNoteFromApi.created_at,
+        date: newNoteFromApi.created_at || new Date().toISOString(),
         author: newNoteFromApi.author,
       };
 
-      setNotes([newNote, ...notes]);
-      
+      if (isEditMode && currentNote.id) {
+        setNotes(notes.map(n => (n.id === currentNote.id ? newNote : n)));
+        
+        // Log audit action for edit
+        await logClientAuditAction({
+          page: 'Project Details',
+          action: `Updated note in project "${project.project_name}": "${currentNote.text?.substring(0, 100)}${currentNote.text && currentNote.text.length > 100 ? '...' : ''}"`
+        });
+      } else {
+        setNotes([newNote, ...notes]);
+        
+        // Log audit action for add
+        await logClientAuditAction({
+          page: 'Project Details',
+          action: `Added note to project "${project.project_name}": "${currentNote.text?.substring(0, 100)}${currentNote.text && currentNote.text.length > 100 ? '...' : ''}"`
+        });
+      }
+
       setShowNoteDialog(false);
       setCurrentNote({ text: '' });
 
@@ -324,20 +364,33 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
     const url = `/api/projects/${project.id}/${type}`;
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
 
       if (response.ok) {
+        let itemName = '';
+        
         if (type === 'contacts') {
+          const contact = contacts.find(c => c.id === id);
+          itemName = contact?.name || 'Unknown Contact';
           setContacts(contacts.filter(c => c.id !== id));
         } else if (type === 'drawings') {
+          const drawing = drawings.find(d => d.id === id);
+          itemName = drawing?.title || 'Unknown Drawing';
           setDrawings(drawings.filter(d => d.id !== id));
         } else if (type === 'notes') {
+          const note = notes.find(n => n.id === id);
+          itemName = note?.text?.substring(0, 50) + (note?.text && note.text.length > 50 ? '...' : '') || 'Unknown Note';
           setNotes(notes.filter(n => n.id !== id));
         }
+        
+        // Log audit action
+        await logClientAuditAction({
+          page: 'Project Details',
+          action: `Deleted ${type.slice(0, -1)}: "${itemName}" from project "${project.project_name}"`
+        });
       } else {
         const errorData = await response.json();
         console.error(`Failed to delete ${type}:`, errorData.error);
@@ -397,7 +450,11 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
   const renderContacts = () => (
     <div>
       <div className="flex justify-end mb-4">
-        <button onClick={() => handleOpenContactDialog()} className="px-3 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-md flex items-center text-sm"><HiPlus className="mr-1" /> Add Contact</button>
+        {canEditProjects() ? (
+          <button onClick={() => handleOpenContactDialog()} className="px-3 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-md flex items-center text-sm"><HiPlus className="mr-1" /> Add Contact</button>
+        ) : (
+          <button disabled className="px-3 py-2 bg-gray-300 text-gray-500 rounded-md flex items-center text-sm cursor-not-allowed" title="View Only - No Add Permission"><HiPlus className="mr-1" /> Add Contact</button>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
         {contacts.length > 0 ? contacts.map(contact => (
@@ -406,8 +463,17 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
               <div className="flex justify-between items-start mb-2">
                 <h3 className="font-bold text-gray-800 text-lg">{contact.name}</h3>
                 <div className="flex items-center space-x-0">
-                  <button onClick={() => handleOpenContactDialog(contact)} className="p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100"><HiPencil size={16} /></button>
-                  <button onClick={() => handleDeleteClick(contact.id, 'contacts')} className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"><HiX size={16} /></button>
+                  {canEditProjects() ? (
+                    <>
+                      <button onClick={() => handleOpenContactDialog(contact)} className="p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100"><HiPencil size={16} /></button>
+                      <button onClick={() => handleDeleteClick(contact.id, 'contacts')} className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"><HiX size={16} /></button>
+                    </>
+                  ) : (
+                    <>
+                      <button disabled className="p-2 text-gray-300 rounded-full cursor-not-allowed" title="View Only - No Edit Permission"><HiPencil size={16} /></button>
+                      <button disabled className="p-2 text-gray-300 rounded-full cursor-not-allowed" title="View Only - No Delete Permission"><HiX size={16} /></button>
+                    </>
+                  )}
                 </div>
               </div>
               <p className="text-sm text-gray-600 mb-4">{contact.title}</p>
@@ -445,7 +511,11 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
   const renderDrawings = () => (
     <div>
       <div className="flex justify-end mb-4">
-        <button onClick={() => handleOpenDrawingDialog()} className="px-3 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-md flex items-center text-sm"><HiPlus className="mr-1" /> Add Drawing</button>
+        {canEditProjects() ? (
+          <button onClick={() => handleOpenDrawingDialog()} className="px-3 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-md flex items-center text-sm"><HiPlus className="mr-1" /> Add Drawing</button>
+        ) : (
+          <button disabled className="px-3 py-2 bg-gray-300 text-gray-500 rounded-md flex items-center text-sm cursor-not-allowed" title="View Only - No Add Permission"><HiPlus className="mr-1" /> Add Drawing</button>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
         {drawings.length > 0 ? drawings.map(drawing => (
@@ -454,11 +524,20 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
               <div className="flex justify-between items-start mb-2">
                 <h3 className="font-bold text-gray-800 text-lg truncate" title={drawing.title}>{drawing.title}</h3>
                 <div className="flex items-center space-x-0">
-                  <button onClick={() => handleOpenDrawingDialog(drawing)} className="p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100"><HiPencil size={16} /></button>
-                  <button onClick={() => handleDeleteClick(drawing.id, 'drawings')} className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"><HiX size={16} /></button>
+                  {canEditProjects() ? (
+                    <>
+                      <button onClick={() => handleOpenDrawingDialog(drawing)} className="p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100"><HiPencil size={16} /></button>
+                      <button onClick={() => handleDeleteClick(drawing.id, 'drawings')} className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"><HiX size={16} /></button>
+                    </>
+                  ) : (
+                    <>
+                      <button disabled className="p-2 text-gray-300 rounded-full cursor-not-allowed" title="View Only - No Edit Permission"><HiPencil size={16} /></button>
+                      <button disabled className="p-2 text-gray-300 rounded-full cursor-not-allowed" title="View Only - No Delete Permission"><HiX size={16} /></button>
+                    </>
+                  )}
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mb-4">{new Date(drawing.date).toLocaleDateString()}</p>
+              <p className="text-sm text-gray-600 mb-4">{formatDateToCharlotte(drawing.date)}</p>
               
               <div className="flex items-center space-x-2 text-sm text-gray-700 group">
                 <HiEye size={16} className="text-gray-400 flex-shrink-0"/>
@@ -478,7 +557,11 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
   const renderNotes = () => (
     <div>
       <div className="flex justify-end mb-4">
-        <button onClick={() => handleOpenNoteDialog()} className="px-3 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-md flex items-center text-sm"><HiPlus className="mr-1" /> Add Note</button>
+        {canEditProjects() ? (
+          <button onClick={() => handleOpenNoteDialog()} className="px-3 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-md flex items-center text-sm"><HiPlus className="mr-1" /> Add Note</button>
+        ) : (
+          <button disabled className="px-3 py-2 bg-gray-300 text-gray-500 rounded-md flex items-center text-sm cursor-not-allowed" title="View Only - No Add Permission"><HiPlus className="mr-1" /> Add Note</button>
+        )}
       </div>
       {notes.length > 0 ? (
         <div className="flow-root">
@@ -499,15 +582,24 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
                       <div className="text-sm text-gray-500">
                         <span className="font-medium text-gray-900">{note.author}</span>
                         {' posted on '}
-                        <time dateTime={note.date}>{new Date(note.date).toLocaleString()}</time>
+                        <time dateTime={note.date}>{formatDateTimeToCharlotte(note.date)}</time>
                       </div>
                       <div className="mt-2 text-sm text-gray-700 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                         <p className="whitespace-pre-wrap">{note.text}</p>
                       </div>
                     </div>
                      <div className="flex-shrink-0 self-center">
-                        <button onClick={() => handleOpenNoteDialog(note)} className="p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100"><HiPencil size={16} /></button>
-                        <button onClick={() => handleDeleteClick(note.id, 'notes')} className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"><HiX size={16} /></button>
+                        {canEditProjects() ? (
+                          <>
+                            <button onClick={() => handleOpenNoteDialog(note)} className="p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100"><HiPencil size={16} /></button>
+                            <button onClick={() => handleDeleteClick(note.id, 'notes')} className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"><HiX size={16} /></button>
+                          </>
+                        ) : (
+                          <>
+                            <button disabled className="p-2 text-gray-300 rounded-full cursor-not-allowed" title="View Only - No Edit Permission"><HiPencil size={16} /></button>
+                            <button disabled className="p-2 text-gray-300 rounded-full cursor-not-allowed" title="View Only - No Delete Permission"><HiX size={16} /></button>
+                          </>
+                        )}
                     </div>
                   </div>
                 </div>

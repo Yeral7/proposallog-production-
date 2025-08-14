@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HiX } from 'react-icons/hi';
+import { fetchWithAuth } from '@/lib/apiClient';
 
 interface Builder {
   id: number;
@@ -33,7 +34,7 @@ interface Location {
 interface AddProjectModalProps {
   isVisible: boolean;
   onClose: () => void;
-  onProjectAdded: () => void;
+  onProjectAdded: (projectName?: string) => void;
 }
 
 interface Project {
@@ -224,9 +225,8 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
     };
 
     try {
-      const response = await fetch('/api/projects', {
+      const response = await fetchWithAuth('/api/projects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(projectData),
       });
 
@@ -236,7 +236,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
       }
 
       resetForm();
-      onProjectAdded();
+      onProjectAdded(projectName);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');

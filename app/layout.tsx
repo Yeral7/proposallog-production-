@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "../components/Sidebar";
+import AuthGuard from "../components/AuthGuard";
 import { Providers } from "./providers";
 import React from "react";
 
@@ -21,10 +22,12 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className}`}>
         <Providers>
-          <div className="flex h-screen">
-            <Sidebar />
-            <div className="flex-1 overflow-auto bg-gray-100">{children}</div>
-          </div>
+          <AuthGuard>
+            <div className="flex h-screen">
+              <Sidebar />
+              <div className="flex-1 overflow-auto bg-gray-100">{children}</div>
+            </div>
+          </AuthGuard>
         </Providers>
       </body>
     </html>

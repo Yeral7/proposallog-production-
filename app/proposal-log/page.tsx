@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { fetchWithAuth } from '@/lib/apiClient';
 import { HiPlus, HiOutlineViewGrid, HiSearch, HiFilter, HiDocumentDuplicate } from "react-icons/hi";
 import Banner from "../../components/Banner";
 import Header from "../../components/Header";
@@ -11,8 +12,11 @@ import ImportProjectModal from "../../components/dashboard/ImportProjectModal";
 import EditProjectModal from "../../components/dashboard/EditProjectModal";
 import FilterProjectsModal, { FilterOptions } from "../../components/dashboard/FilterProjectsModal";
 import ProjectDetails from "../../components/dashboard/ProjectDetails";
+import { useAuth } from "../../contexts/AuthContext";
+import { logClientAuditAction } from '@/lib/clientAuditLogger';
 
 export default function ProposalLogPage() {
+  const { canEditProjects } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +51,7 @@ export default function ProposalLogPage() {
   const fetchProjects = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/projects');
+      const response = await fetchWithAuth('/api/projects');
       if (!response.ok) {
         throw new Error('Failed to fetch projects');
       }
@@ -191,8 +195,16 @@ export default function ProposalLogPage() {
     setCurrentPage(1); // Reset to first page on sort
   };
 
-  const handleProjectAdded = () => {
-    fetchProjects();
+  const handleProjectAdded = async (projectName?: string) => {
+    await fetchProjects();
+    
+    // Log audit action
+    if (projectName) {
+      await logClientAuditAction({
+        page: 'Proposal Log',
+        action: `Added new project: "${projectName}"`
+      });
+    }
   };
 
   const handleEditProject = (project: Project) => {
@@ -210,8 +222,16 @@ export default function ProposalLogPage() {
     }, 100);
   };
   
-  const handleProjectUpdated = () => {
-    fetchProjects();
+  const handleProjectUpdated = async (projectName?: string, action?: string) => {
+    await fetchProjects();
+    
+    // Log audit action
+    if (projectName) {
+      await logClientAuditAction({
+        page: 'Proposal Log',
+        action: action || `Updated project: "${projectName}"`
+      });
+    }
   };
   
   // Handle project export
@@ -262,20 +282,43 @@ export default function ProposalLogPage() {
                 <HiFilter className="w-4 h-4 sm:w-5 sm:h-5" />
                 Filter
               </button>
-              <button 
-                onClick={() => setIsAddModalOpen(true)}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-[var(--primary-color)] hover:bg-[var(--secondary-color)] text-white rounded-md flex items-center gap-2 shadow-sm justify-center"
-              >
-                <HiPlus className="w-4 h-4 sm:w-5 sm:h-5" />
-                Add New
-              </button>
-              <button 
-                onClick={() => setIsImportModalOpen(true)}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-[var(--primary-color)] hover:bg-[var(--secondary-color)] text-white rounded-md flex items-center gap-2 shadow-sm justify-center"
-              >
-                <HiDocumentDuplicate className="w-4 h-4 sm:w-5 sm:h-5" />
-                Import
-              </button>
+              {canEditProjects() ? (
+                <>
+                  <button 
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-[var(--primary-color)] hover:bg-[var(--secondary-color)] text-white rounded-md flex items-center gap-2 shadow-sm justify-center"
+                  >
+                    <HiPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                    Add New
+                  </button>
+                  <button 
+                    onClick={() => setIsImportModalOpen(true)}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-[var(--primary-color)] hover:bg-[var(--secondary-color)] text-white rounded-md flex items-center gap-2 shadow-sm justify-center"
+                  >
+                    <HiDocumentDuplicate className="w-4 h-4 sm:w-5 sm:h-5" />
+                    Import
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    disabled
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-gray-300 text-gray-500 rounded-md flex items-center gap-2 shadow-sm justify-center cursor-not-allowed"
+                    title="View Only - No Add Permission"
+                  >
+                    <HiPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                    Add New
+                  </button>
+                  <button 
+                    disabled
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-gray-300 text-gray-500 rounded-md flex items-center gap-2 shadow-sm justify-center cursor-not-allowed"
+                    title="View Only - No Import Permission"
+                  >
+                    <HiDocumentDuplicate className="w-4 h-4 sm:w-5 sm:h-5" />
+                    Import
+                  </button>
+                </>
+              )}
             </div>
           </div>
           <div className="mb-4 relative">

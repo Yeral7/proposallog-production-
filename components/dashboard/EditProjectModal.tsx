@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { HiX } from 'react-icons/hi';
 import type { Project } from './ProposalTable';
+import { fetchWithAuth } from '@/lib/apiClient';
 
 interface Builder {
   id: number;
@@ -34,7 +35,7 @@ interface Location {
 interface EditProjectModalProps {
   isVisible: boolean;
   onClose: () => void;
-  onProjectUpdated: () => void;
+  onProjectUpdated: (projectName?: string, action?: string) => void;
   project: Project | null;
 }
 
@@ -248,7 +249,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
       // Ensure we're using the numeric ID value directly
       const projectId = typeof project.id === 'number' ? project.id : parseInt(project.id);
       
-      const response = await fetch(`/api/projects/${projectId}`, {
+      const response = await fetchWithAuth(`/api/projects/${projectId}`, {
         method: 'DELETE',
       });
 
@@ -260,7 +261,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
         throw new Error(errorMessage);
       }
 
-      onProjectUpdated();
+      onProjectUpdated(project.project_name, `Deleted project: "${project.project_name}"`);
       onClose();
     } catch (err) {
       console.error('Error deleting project:', err);
@@ -312,9 +313,8 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
     };
 
     try {
-      const response = await fetch(`/api/projects/${project?.id}`, {
+      const response = await fetchWithAuth(`/api/projects/${project?.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(projectData),
       });
 
@@ -323,7 +323,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
         throw new Error(errorData.error || 'Failed to update project');
       }
 
-      onProjectUpdated();
+      onProjectUpdated(projectName, `Updated project: "${projectName}"`);
       onClose();
 
     } catch (err) {

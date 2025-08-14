@@ -1,5 +1,6 @@
 import React from 'react';
 import { HiPencil, HiChevronUp, HiChevronDown, HiSelector, HiDocumentDuplicate, HiLink } from 'react-icons/hi';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Define the type for a single project, including the joined data
 export interface Project {
@@ -53,6 +54,7 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
   totalPages = 1,
   onPageChange = () => {}
 }) => {
+  const { canEditProjects } = useAuth();
   
   const handleSort = (field: SortField) => {
     let newDirection: SortDirection = 'asc';
@@ -163,21 +165,42 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
                 className={`group border-b border-gray-200 ${selectedProjectId === project.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
               >
                 <td className="py-4 px-4">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onEdit(project); }}
-                      className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
-                      title="Edit Project"
-                    >
-                      <HiPencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onExport(project); }}
-                      className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
-                      title="Export Project"
-                    >
-                      <HiDocumentDuplicate className="w-4 h-4" />
-                    </button>
+                  <div className="flex space-x-2">
+                    {canEditProjects() ? (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onEdit(project); }}
+                          className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
+                          title="Edit Project"
+                        >
+                          <HiPencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onExport(project); }}
+                          className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
+                          title="Export Project"
+                        >
+                          <HiDocumentDuplicate className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex space-x-2">
+                        <button
+                          disabled
+                          className="p-1 bg-gray-100 rounded-md text-gray-400 cursor-not-allowed"
+                          title="View Only - No Edit Permission"
+                        >
+                          <HiPencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          disabled
+                          className="p-1 bg-gray-100 rounded-md text-gray-400 cursor-not-allowed"
+                          title="View Only - No Export Permission"
+                        >
+                          <HiDocumentDuplicate className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </td>
                 <td className="py-4 px-4 cursor-pointer" onClick={() => onSelectProject && onSelectProject(project)}>

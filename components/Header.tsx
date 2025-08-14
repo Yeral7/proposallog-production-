@@ -3,10 +3,10 @@
 import React from "react";
 import Link from "next/link";
 import { HiOutlineUser, HiOutlineLogout } from "react-icons/hi";
-import { useAuth } from "@/lib/auth/AuthContext";
+import { useAuth } from "../contexts/AuthContext";
 
 const Header: React.FC = () => {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, logout } = useAuth();
   
   return (
     <header className="bg-[var(--header-gray)] text-white p-4 shadow-sm">
@@ -14,15 +14,18 @@ const Header: React.FC = () => {
         <h1 className="text-xl font-bold">Casanova</h1>
         
         <div className="flex items-center space-x-3">
-          {isAuthenticated && user ? (
+          {user ? (
             <>
               <div className="bg-gray-700 px-4 py-1.5 rounded-md flex items-center min-w-[150px]">
                 <div className="mr-2">
                   <div className="h-6 w-6 rounded-full bg-gray-400 flex items-center justify-center text-gray-800 text-xs font-bold">
-                    {user.username.charAt(0).toUpperCase()}
+                    {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
                   </div>
                 </div>
-                <span className="text-sm font-medium truncate">{user.username}</span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium truncate">{user.name || user.email}</span>
+                  <span className="text-xs text-gray-300 capitalize">{user.role}</span>
+                </div>
               </div>
               <button 
                 onClick={logout}
