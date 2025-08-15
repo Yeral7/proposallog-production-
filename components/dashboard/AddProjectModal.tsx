@@ -116,7 +116,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
       // Helper function for safe fetch and parse
       const fetchData = async (url, label) => {
         try {
-          const response = await fetch(url);
+          const response = await fetchWithAuth(url);
           
           if (!response.ok) {
             throw new Error(`${label} fetch failed with status ${response.status}`);
