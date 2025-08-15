@@ -246,9 +246,8 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
         });
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body,
       });
 
@@ -258,21 +257,39 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           id: savedDrawing.id.toString(),
           title: savedDrawing.title,
           url: savedDrawing.url,
-          date: savedDrawing.created_at,
+          date: savedDrawing.created_at || new Date().toISOString(),
         };
 
         if (isEditMode) {
           setDrawings(drawings.map(d => d.id === formattedDrawing.id ? formattedDrawing : d));
+          
+          // Log audit action for edit
+          await logClientAuditAction({
+            page: 'Project Details',
+            action: `Updated drawing: "${formattedDrawing.title}" in project "${project.project_name}"`
+          });
         } else {
           setDrawings([...drawings, formattedDrawing]);
+          
+          // Log audit action for add
+          await logClientAuditAction({
+            page: 'Project Details',
+            action: `Added drawing: "${formattedDrawing.title}" to project "${project.project_name}"`
+          });
         }
         setShowDrawingDialog(false);
         setCurrentDrawing({ title: '', url: '' });
         setIsEditMode(false);
       } else {
-        const errorData = await response.json();
-        console.error('Failed to save drawing:', errorData.error);
-        alert(`Failed to save drawing: ${errorData.error}`);
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+        }
+        console.error('Failed to save drawing:', errorMessage);
+        alert(`Failed to save drawing: ${errorMessage}`);
       }
     } catch (err) {
       console.error('Error saving drawing:', err);

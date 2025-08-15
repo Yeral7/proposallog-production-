@@ -76,7 +76,7 @@ const Sidebar = () => {
             {/* Version Only */}
             <div className="mt-auto pt-4 border-t border-gray-700">
                 <div className="text-xs text-gray-500 text-center">
-                    Beta v 1.03
+                    Beta v 1.04
                 </div>
             </div>
         </div>

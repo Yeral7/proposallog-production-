@@ -61,14 +61,21 @@ export async function POST(
       .single();
     
     if (error) {
-      console.error('Supabase error:', error);
+      console.error('Supabase error creating drawing:', error);
+      console.error('Drawing data:', { project_id: projectId, title: data.title, url: data.url });
       return NextResponse.json(
         { error: 'Failed to create project drawing' },
         { status: 500 }
       );
     }
     
-    return NextResponse.json(newDrawing, { status: 201 });
+    // Ensure created_at has a fallback value
+    const drawingWithTimestamp = {
+      ...newDrawing,
+      created_at: newDrawing.created_at || new Date().toISOString()
+    };
+    
+    return NextResponse.json(drawingWithTimestamp, { status: 201 });
   } catch (error) {
     console.error('Error creating project drawing:', error);
     return NextResponse.json({ error: 'Failed to create project drawing' }, { status: 500 });
