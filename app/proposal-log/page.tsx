@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/apiClient';
 import { HiPlus, HiOutlineViewGrid, HiSearch, HiFilter, HiDocumentDuplicate } from "react-icons/hi";
 import Banner from "../../components/Banner";
@@ -20,6 +20,13 @@ export default function ProposalLogPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [dataChangeDetected, setDataChangeDetected] = useState(false);
+  const [lastDataHash, setLastDataHash] = useState<string>('');
+  const [notification, setNotification] = useState<string | null>(null);
+  const { canAccessAdmin } = useAuth(); // Use auth context to check admin status
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -43,26 +50,71 @@ export default function ProposalLogPage() {
   const [prioritySortCycle, setPrioritySortCycle] = useState(0); // 0: none, 1: Overdue, 2: High, 3: Medium, 4: Low
   const ITEMS_PER_PAGE = 7; // Limit to 7 projects per page
 
-  // Fetch projects when the component mounts
+  // Fetch projects when the component mounts and set up auto-refresh
   useEffect(() => {
     fetchProjects();
+    
+    // Set up auto-refresh interval (every 30 seconds)
+    refreshIntervalRef.current = setInterval(() => {
+      fetchProjects(true); // true = silent refresh (don't show full loading spinner)
+    }, 30000);
+    
+    // Clean up interval on unmount
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
   }, []);
 
-  const fetchProjects = async () => {
-    setIsLoading(true);
+  // Simple hash function to detect data changes
+  const hashData = (data: any[]): string => {
+    return data.map(item => item.id + '-' + 
+      (item.updated_at || item.submission_date || '')
+    ).join('|');
+  };
+
+  const fetchProjects = async (silent: boolean = false) => {
+    if (!silent) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+    
     try {
       const response = await fetchWithAuth('/api/projects');
       if (!response.ok) {
         throw new Error('Failed to fetch projects');
       }
       const data = await response.json();
+      
+      // Check if data has changed since last fetch
+      const newDataHash = hashData(data);
+      if (lastDataHash && newDataHash !== lastDataHash && silent) {
+        // Data changed during silent refresh = likely changed by another user
+        setDataChangeDetected(true);
+        
+        // Only show notification to admin users
+        if (canAccessAdmin()) {
+          setNotification('Projects data was updated');
+          setTimeout(() => setNotification(null), 5000); // Clear notification after 5 seconds
+        }
+      }
+      
+      setLastDataHash(newDataHash);
       setProjects(data);
+      setLastRefreshTime(new Date());
       setError(null);
     } catch (err) {
       console.error('Error fetching projects:', err);
-      setError('Failed to load projects. Please try again.');
+      if (!silent) {
+        setError('Failed to load projects. Please try again.');
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      } 
+      setIsRefreshing(false);
     }
   };
 
@@ -197,6 +249,7 @@ export default function ProposalLogPage() {
 
   const handleProjectAdded = async (projectName?: string) => {
     await fetchProjects();
+    setDataChangeDetected(false); // Reset change indicator after manual refresh
     
     // Log audit action
     if (projectName) {
@@ -224,6 +277,7 @@ export default function ProposalLogPage() {
   
   const handleProjectUpdated = async (projectName?: string, action?: string) => {
     await fetchProjects();
+    setDataChangeDetected(false); // Reset change indicator after manual refresh
     
     // Log audit action
     if (projectName) {
@@ -273,7 +327,22 @@ export default function ProposalLogPage() {
       <main className="flex-1 bg-gray-50 rounded-t-3xl -mt-8 relative z-10 shadow-lg">
         <div className="p-3 sm:p-6 w-full">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Projects</h1>
+            <div className="flex flex-col">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Projects</h1>
+              {lastRefreshTime && (
+                <div className="text-xs text-gray-500 mt-1 flex items-center">
+                  <span>Last updated: {lastRefreshTime.toLocaleTimeString()}</span>
+                  {dataChangeDetected && canAccessAdmin() && (
+                    <span className="ml-2 text-green-600 font-medium">• Data updated</span>
+                  )}
+                  {isRefreshing && (
+                    <span className="ml-2 inline-block">
+                      <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-blue-500"></div>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-3 sm:mt-0">
               <button 
                 onClick={() => setIsFilterModalOpen(true)}
@@ -281,6 +350,19 @@ export default function ProposalLogPage() {
               >
                 <HiFilter className="w-4 h-4 sm:w-5 sm:h-5" />
                 Filter
+              </button>
+              <button 
+                onClick={() => {
+                  fetchProjects();
+                  setDataChangeDetected(false);
+                }}
+                disabled={isLoading}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base ${dataChangeDetected ? 'bg-green-50 border-green-300' : 'bg-white border-gray-300'} text-gray-700 rounded-md flex items-center gap-2 shadow-sm hover:bg-gray-50 justify-center ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRefreshing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
               </button>
               {canEditProjects() ? (
                 <>
@@ -370,6 +452,24 @@ export default function ProposalLogPage() {
           )}
         </div>
       </main>
+      
+      {/* Notification toast */}
+      {notification && (
+        <div className="fixed bottom-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg z-50 flex items-center">
+          <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span>{notification}</span>
+          <button 
+            onClick={() => setNotification(null)} 
+            className="ml-4 text-green-700 hover:text-green-900"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
       
       {/* Modals */}
       <AddProjectModal 

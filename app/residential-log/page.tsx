@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { HiPlus, HiOutlineViewGrid, HiSearch, HiFilter, HiDocumentDuplicate } from "react-icons/hi";
 import Banner from "../../components/Banner";
 import Header from "../../components/Header";
@@ -18,6 +18,9 @@ export default function ResidentialLogPage() {
   const [projects, setProjects] = useState<ResidentialProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Modal states
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -35,16 +38,39 @@ export default function ResidentialLogPage() {
   const [prioritySortCycle, setPrioritySortCycle] = useState(0); // 0: none, 1: Overdue, 2: High, 3: Medium, 4: Low
   const ITEMS_PER_PAGE = 7; // Limit to 7 projects per page
 
-  // Fetch projects when the component mounts
+  // Fetch projects when the component mounts and set up auto-refresh
   useEffect(() => {
     fetchProjects();
+    
+    // Set up auto-refresh interval (every 30 seconds)
+    refreshIntervalRef.current = setInterval(() => {
+      fetchProjects(true); // silent refresh
+    }, 30000);
+    
+    // Clean up interval on unmount
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
   }, []);
 
-  const fetchProjects = async () => {
-    setIsLoading(true);
+  const fetchProjects = async (silent: boolean = false) => {
+    if (!silent) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+    
     // Data fetching is removed. We will use a different table for this.
+    // When actual data fetching is implemented, it will go here
     setProjects([]); 
-    setIsLoading(false);
+    setLastRefreshTime(new Date());
+    
+    if (!silent) {
+      setIsLoading(false);
+    }
+    setIsRefreshing(false);
     setError(null);
   };
 
@@ -103,7 +129,19 @@ export default function ResidentialLogPage() {
       <main className="flex-1 p-4 sm:p-6 lg:p-8">
         <div className="max-w-full mx-auto">
           <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Residential Log</h1>
+            <div className="flex flex-col">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Residential Log</h1>
+              {lastRefreshTime && (
+                <div className="text-xs text-gray-500 mt-1 flex items-center">
+                  <span>Last updated: {lastRefreshTime.toLocaleTimeString()}</span>
+                  {isRefreshing && (
+                    <span className="ml-2 inline-block">
+                      <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-blue-500"></div>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <button 
                 onClick={() => setIsFilterModalOpen(true)}
@@ -111,6 +149,16 @@ export default function ResidentialLogPage() {
               >
                 <HiFilter className="w-4 h-4 sm:w-5 sm:h-5" />
                 Filter
+              </button>
+              <button 
+                onClick={() => fetchProjects()}
+                disabled={isLoading}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-white border border-gray-300 text-gray-700 rounded-md flex items-center gap-2 shadow-sm hover:bg-gray-50 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRefreshing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
               </button>
 
             </div>

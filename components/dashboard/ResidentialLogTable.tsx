@@ -7,7 +7,6 @@ export interface ResidentialProject {
   project_name: string;
   builder: string;
   subcontractor: string;
-  notes: string;
   start_date: string | null;
   est_completion_date: string | null;
   contract_value: number | null;
@@ -83,7 +82,6 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
                   {renderSortIcon('subcontractor')}
                 </button>
               </th>
-              <th className="py-4 px-4 text-left">Notes</th>
               <th className="py-4 px-4 text-left">
                 <button onClick={() => handleSort('start_date')} className="flex items-center hover:text-blue-500 focus:outline-none">
                   Start Date
@@ -129,7 +127,6 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
                 </td>
                 <td className="py-4 px-4">{project.builder}</td>
                 <td className="py-4 px-4">{project.subcontractor}</td>
-                <td className="py-4 px-4">{project.notes}</td>
                 <td className="py-4 px-4">
                   {project.start_date ? new Date(project.start_date).toLocaleDateString() : 'N/A'}
                 </td>
