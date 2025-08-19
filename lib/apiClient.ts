@@ -1,5 +1,13 @@
 export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('token');
+  // Safe access to localStorage (only in browser environment)
+  let token = null;
+  try {
+    if (typeof window !== 'undefined') {
+      token = localStorage.getItem('token');
+    }
+  } catch (error) {
+    console.error('Error accessing localStorage:', error);
+  }
 
   const headers = {
     ...options.headers,

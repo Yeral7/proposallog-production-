@@ -17,7 +17,7 @@ export async function PUT(
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
     
-    if (!decoded || (decoded.role !== 'Manager' && decoded.role !== 'Admin')) {
+            if (!decoded || !['manager', 'admin'].includes(decoded.role)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
@@ -29,7 +29,7 @@ export async function PUT(
 
     const data = await request.json();
     
-    if (!data.residential_project_name) {
+    if (!data.project_name) {
       return NextResponse.json({ error: 'Project name is required' }, { status: 400 });
     }
 
@@ -38,23 +38,21 @@ export async function PUT(
     // Get original project for audit
     const { data: originalProject } = await supabase
       .from('residential_projects')
-      .select('residential_project_name')
+      .select('project_name')
       .eq('id', projectId)
       .single();
 
     const { data: updatedProject, error } = await supabase
       .from('residential_projects')
       .update({
-        residential_project_name: data.residential_project_name,
-        builder_id: data.builder_id || null,
-        builder: data.builder || '',
-        subcontractor: data.subcontractor || '',
-        notes: data.notes || '',
+        project_name: data.project_name,
+        builder_id: data.builder_id,
+        subcontractor_id: data.subcontractor_id,
         start_date: data.start_date || null,
         est_completion_date: data.est_completion_date || null,
         contract_value: data.contract_value || null,
-        status_id: data.status_id || null,
         status: data.status || '',
+        priority: data.priority || 'Medium',
         updated_by: decoded.userId,
         updated_at: new Date().toISOString()
       })
@@ -72,7 +70,7 @@ export async function PUT(
     
     // Add audit log
     try {
-      const projectName = originalProject?.residential_project_name || data.residential_project_name;
+      const projectName = originalProject?.project_name || data.project_name;
       await supabase
         .from('audit_logs')
         .insert({
@@ -109,7 +107,7 @@ export async function DELETE(
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
     
-    if (!decoded || (decoded.role !== 'Manager' && decoded.role !== 'Admin')) {
+            if (!decoded || !['manager', 'admin'].includes(decoded.role)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
@@ -124,7 +122,7 @@ export async function DELETE(
     // Get project name for audit before deletion
     const { data: projectToDelete } = await supabase
       .from('residential_projects')
-      .select('residential_project_name')
+      .select('project_name')
       .eq('id', projectId)
       .single();
 
@@ -143,7 +141,7 @@ export async function DELETE(
     
     // Add audit log
     try {
-      const projectName = projectToDelete?.residential_project_name || `Project ID ${projectId}`;
+      const projectName = projectToDelete?.project_name || `Project ID ${projectId}`;
       await supabase
         .from('audit_logs')
         .insert({

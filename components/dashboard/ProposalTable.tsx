@@ -21,7 +21,8 @@ export interface Project {
   follow_up_date: string | null;
   contract_value: number | null;
   reference_project_id?: number | null;
-  priority?: string;
+  priority_id: number | null;
+  priority_name: string | null;
 }
 
 export type SortDirection = 'asc' | 'desc' | null;
@@ -74,8 +75,8 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
     if (sortDirection === 'desc') return <HiChevronDown className="w-4 h-4 ml-1 text-blue-600" />;
     return <HiSelector className="w-4 h-4 ml-1 text-gray-400" />;
   };
-  const getPriorityColor = (priority?: string | null): string => {
-    switch (priority) {
+  const getPriorityColor = (priority_name?: string | null): string => {
+    switch (priority_name) {
       case 'Overdue':
         return 'text-red-700 font-semibold';
       case 'High':
@@ -225,8 +226,8 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
                     : 'N/A'}
                 </td>
                 <td className="py-4 px-4">{project.estimator_name}</td>
-                <td className={`py-4 px-4 ${getPriorityColor(project.priority)}`}>
-                  {project.priority || 'N/A'}
+                <td className={`py-4 px-4 ${getPriorityColor(project.priority_name)}`}>
+                  {project.priority_name || 'N/A'}
                 </td>
                 <td className="py-4 px-4">{project.status_label}</td>
                 <td className="py-4 px-4">

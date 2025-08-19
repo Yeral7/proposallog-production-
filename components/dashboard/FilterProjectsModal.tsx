@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { fetchWithAuth } from '../../lib/apiClient';
 import { HiX } from 'react-icons/hi';
 
 interface Builder {
@@ -28,7 +29,11 @@ interface Location {
   name: string;
 }
 
-// Division interface removed
+interface DropdownItem {
+  id: number;
+  name?: string;
+  label?: string;
+}
 
 export interface FilterOptions {
   builderId?: string;
@@ -37,7 +42,10 @@ export interface FilterOptions {
   statusId?: string;
   locationId?: string;
   dueDate?: string;
+  priorityId?: string;
 }
+
+// Division interface removed
 
 interface FilterProjectsModalProps {
   isVisible: boolean;
@@ -52,11 +60,17 @@ export default function FilterProjectsModal({
   onApplyFilters,
   currentFilters 
 }: FilterProjectsModalProps) {
-  const [builders, setBuilders] = useState<Builder[]>([]);
-  const [estimators, setEstimators] = useState<Estimator[]>([]);
-  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
-  const [statuses, setStatuses] = useState<Status[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [builders, setBuilders] = useState<DropdownItem[]>([]);
+  const [estimators, setEstimators] = useState<DropdownItem[]>([]);
+  const [supervisors, setSupervisors] = useState<DropdownItem[]>([]);
+  const [statuses, setStatuses] = useState<DropdownItem[]>([]);
+  const [locations, setLocations] = useState<DropdownItem[]>([]);
+  const [priorities, setPriorities] = useState<DropdownItem[]>([]);
+  
+  // Debug effect for priorities
+  useEffect(() => {
+    console.log('Priorities state updated:', priorities);
+  }, [priorities]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,10 +82,12 @@ export default function FilterProjectsModal({
   const [statusId, setStatusId] = useState(currentFilters.statusId || '');
   const [locationId, setLocationId] = useState(currentFilters.locationId || '');
   const [dueDate, setDueDate] = useState(currentFilters.dueDate || '');
+  const [priorityId, setPriorityId] = useState(currentFilters.priorityId || '');
 
   // Fetch dropdown data when modal opens
   useEffect(() => {
-    if (isVisible) {
+    // Only fetch data when component becomes visible and we're in a browser environment
+    if (isVisible && typeof window !== 'undefined') {
       fetchReferenceData();
     }
   }, [isVisible]);
@@ -84,33 +100,45 @@ export default function FilterProjectsModal({
     setStatusId(currentFilters.statusId || '');
     setLocationId(currentFilters.locationId || '');
     setDueDate(currentFilters.dueDate || '');
+    setPriorityId(currentFilters.priorityId || '');
   }, [currentFilters]);
 
   const fetchReferenceData = async () => {
     try {
-      const buildersRes = await fetch('/api/builders');
-      const builders = await buildersRes.json();
-      setBuilders(builders);
+      const buildersRes = await fetchWithAuth('/api/builders');
+      if (!buildersRes.ok) throw new Error(`Failed to fetch builders: ${buildersRes.statusText}`);
+      const buildersData = await buildersRes.json();
+      setBuilders(Array.isArray(buildersData) ? buildersData : []);
 
-      const estimatorsRes = await fetch('/api/estimators');
-      const estimators = await estimatorsRes.json();
-      setEstimators(estimators);
+      const estimatorsRes = await fetchWithAuth('/api/estimators');
+      if (!estimatorsRes.ok) throw new Error(`Failed to fetch estimators: ${estimatorsRes.statusText}`);
+      const estimatorsData = await estimatorsRes.json();
+      setEstimators(Array.isArray(estimatorsData) ? estimatorsData : []);
       
-      const supervisorsRes = await fetch('/api/supervisors');
-      const supervisors = await supervisorsRes.json();
-      setSupervisors(supervisors);
+      const supervisorsRes = await fetchWithAuth('/api/supervisors');
+      if (!supervisorsRes.ok) throw new Error(`Failed to fetch supervisors: ${supervisorsRes.statusText}`);
+      const supervisorsData = await supervisorsRes.json();
+      setSupervisors(Array.isArray(supervisorsData) ? supervisorsData : []);
 
-      const statusesRes = await fetch('/api/statuses');
-      const statuses = await statusesRes.json();
-      setStatuses(statuses);
+      const statusesRes = await fetchWithAuth('/api/statuses');
+      if (!statusesRes.ok) throw new Error(`Failed to fetch statuses: ${statusesRes.statusText}`);
+      const statusesData = await statusesRes.json();
+      setStatuses(Array.isArray(statusesData) ? statusesData : []);
 
-      const locationsRes = await fetch('/api/locations');
-      const locations = await locationsRes.json();
-      setLocations(locations);
+      const locationsRes = await fetchWithAuth('/api/locations');
+      if (!locationsRes.ok) throw new Error(`Failed to fetch locations: ${locationsRes.statusText}`);
+      const locationsData = await locationsRes.json();
+      setLocations(Array.isArray(locationsData) ? locationsData : []);
+
+      const prioritiesRes = await fetchWithAuth('/api/priorities');
+      if (!prioritiesRes.ok) throw new Error(`Failed to fetch priorities: ${prioritiesRes.statusText}`);
+      const prioritiesData = await prioritiesRes.json();
+      console.log('Priorities from API:', prioritiesData);
+      setPriorities(Array.isArray(prioritiesData) ? prioritiesData : []);
 
     } catch (err) {
       console.error('Error fetching reference data:', err);
-      setError('Failed to load filter options. Please try again.');
+      setError(`Failed to load filter options: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -121,7 +149,8 @@ export default function FilterProjectsModal({
       supervisorId: supervisorId || undefined,
       statusId: statusId || undefined,
       locationId: locationId || undefined,
-      dueDate: dueDate || undefined
+      dueDate: dueDate || undefined,
+      priorityId: priorityId || undefined
     };
     
     onApplyFilters(filters);
@@ -135,6 +164,7 @@ export default function FilterProjectsModal({
     setStatusId('');
     setLocationId('');
     setDueDate('');
+    setPriorityId('');
     
     onApplyFilters({});
     onClose();
@@ -168,11 +198,11 @@ export default function FilterProjectsModal({
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
               >
                 <option value="">All Builders</option>
-                {builders.map((builder) => (
+                {Array.isArray(builders) && builders.length > 0 ? builders.map((builder) => (
                   <option key={builder.id} value={builder.id}>
                     {builder.name}
                   </option>
-                ))}
+                )) : <option disabled>No builders available</option>}
               </select>
             </div>
 
@@ -187,11 +217,11 @@ export default function FilterProjectsModal({
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
               >
                 <option value="">All Estimators</option>
-                {estimators.map((estimator) => (
+                {Array.isArray(estimators) && estimators.length > 0 ? estimators.map((estimator) => (
                   <option key={estimator.id} value={estimator.id}>
                     {estimator.name}
                   </option>
-                ))}
+                )) : <option disabled>No estimators available</option>}
               </select>
             </div>
             
@@ -206,11 +236,11 @@ export default function FilterProjectsModal({
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
               >
                 <option value="">All Supervisors</option>
-                {supervisors.map((supervisor) => (
+                {Array.isArray(supervisors) && supervisors.length > 0 ? supervisors.map((supervisor) => (
                   <option key={supervisor.id} value={supervisor.id}>
                     {supervisor.name}
                   </option>
-                ))}
+                )) : <option disabled>No supervisors available</option>}
               </select>
             </div>
 
@@ -225,11 +255,11 @@ export default function FilterProjectsModal({
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
               >
                 <option value="">All Statuses</option>
-                {statuses.map((status) => (
+                {Array.isArray(statuses) && statuses.length > 0 ? statuses.map((status) => (
                   <option key={status.id} value={status.id}>
                     {status.label}
                   </option>
-                ))}
+                )) : <option disabled>No statuses available</option>}
               </select>
             </div>
 
@@ -244,11 +274,11 @@ export default function FilterProjectsModal({
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
               >
                 <option value="">All Locations</option>
-                {locations.map((location) => (
+                {Array.isArray(locations) && locations.length > 0 ? locations.map((location) => (
                   <option key={location.id} value={location.id}>
                     {location.name}
                   </option>
-                ))}
+                )) : <option disabled>No locations available</option>}
               </select>
             </div>
 
@@ -265,6 +295,26 @@ export default function FilterProjectsModal({
                 onChange={(e) => setDueDate(e.target.value)}
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
               />
+            </div>
+            
+            <div>
+              <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
+                Priority
+              </label>
+              <select
+                id="priority"
+                value={priorityId}
+                onChange={(e) => setPriorityId(e.target.value)}
+                className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
+                disabled={loading}
+              >
+                <option value="">All Priorities</option>
+                {Array.isArray(priorities) && priorities.map((priorityItem) => (
+                  <option key={priorityItem.id} value={priorityItem.id}>
+                    {priorityItem.name || priorityItem.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

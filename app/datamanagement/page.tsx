@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { HiOutlineCog, HiTrash, HiPlus, HiOutlineOfficeBuilding, HiOutlineLocationMarker, HiOutlineUser, HiSearch } from "react-icons/hi";
+import { HiOutlineCog, HiTrash, HiPlus, HiOutlineOfficeBuilding, HiOutlineLocationMarker, HiOutlineUser, HiSearch, HiUsers } from "react-icons/hi";
 import Banner from '../../components/Banner';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import Header from "../../components/Header";
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchWithAuth } from '@/lib/apiClient';
 import { logClientAuditAction } from '@/lib/clientAuditLogger';
+import SubcontractorsManager from '../../components/dashboard/SubcontractorsManager';
 
 // Define types for the data entities
 interface Builder {
@@ -31,7 +32,7 @@ interface Location {
 }
 
 // Define the type for the active tab
-type ActiveTab = 'builders' | 'estimators' | 'supervisors' | 'locations';
+type ActiveTab = 'builders' | 'estimators' | 'supervisors' | 'locations' | 'subcontractors';
 
 const DataManagementPage = () => {
   return (
@@ -49,6 +50,7 @@ const DataManagementPageContent = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   
   const [activeTab, setActiveTab] = useState<ActiveTab>('builders');
+  const [managementType, setManagementType] = useState<'commercial' | 'residential'>('commercial');
   
   const [newItemName, setNewItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,8 +59,11 @@ const DataManagementPageContent = () => {
 
   const fetchAllData = useCallback(async () => {
     try {
+      // Fetch different builder data based on management type
+      const buildersEndpoint = managementType === 'residential' ? '/api/residential-builders' : '/api/builders';
+      
       const [buildersRes, estimatorsRes, supervisorsRes, locationsRes] = await Promise.all([
-        fetchWithAuth('/api/builders'),
+        fetchWithAuth(buildersEndpoint),
         fetchWithAuth('/api/estimators'),
         fetchWithAuth('/api/supervisors'),
         fetchWithAuth('/api/locations'),
@@ -85,7 +90,7 @@ const DataManagementPageContent = () => {
     } catch (error) {
       console.error('Failed to fetch data:', error);
     }
-  }, []);
+  }, [managementType]);
 
   useEffect(() => {
     fetchAllData();
@@ -96,7 +101,13 @@ const DataManagementPageContent = () => {
     if (!newItemName.trim()) return;
 
     try {
-      const response = await fetchWithAuth(`/api/${activeTab}/add`,
+      // Use different endpoints based on management type
+      let endpoint = `/api/${activeTab}/add`;
+      if (managementType === 'residential' && activeTab === 'builders') {
+        endpoint = '/api/residential-builders/add';
+      }
+      
+      const response = await fetchWithAuth(endpoint,
         {
           method: 'POST',
           body: JSON.stringify({ name: newItemName }),
@@ -130,7 +141,13 @@ const DataManagementPageContent = () => {
     const { id, type } = deleteConfirmItem;
 
     try {
-      const response = await fetchWithAuth(`/api/${type}/delete?id=${id}`, {
+      // Use different endpoints based on management type
+      let endpoint = `/api/${type}/delete?id=${id}`;
+      if (managementType === 'residential' && type === 'builders') {
+        endpoint = `/api/residential-builders/delete?id=${id}`;
+      }
+      
+      const response = await fetchWithAuth(endpoint, {
         method: 'DELETE',
       });
 
@@ -159,6 +176,10 @@ const DataManagementPageContent = () => {
     let data: {id: number, name: string}[] = [];
     let placeholder = '';
     let entityName = '';
+
+    if (activeTab === 'subcontractors') {
+      return <SubcontractorsManager />;
+    }
 
     switch(activeTab) {
         case 'builders':
@@ -285,12 +306,38 @@ const DataManagementPageContent = () => {
         <Banner title="Data Management" icon={<HiOutlineCog />} />
 
         <div className="mt-8">
+          <div className="mb-6 flex justify-center">
+            <div className="relative flex p-1 bg-gray-200 rounded-full">
+              <button
+                onClick={() => { setManagementType('commercial'); setActiveTab('builders'); }}
+                className={`relative z-10 flex items-center justify-center w-32 h-10 text-sm font-medium rounded-full transition-colors ${managementType === 'commercial' ? 'text-white' : 'text-gray-600'}`}>
+                Commercial
+              </button>
+              <button
+                onClick={() => { setManagementType('residential'); setActiveTab('builders'); }}
+                className={`relative z-10 flex items-center justify-center w-32 h-10 text-sm font-medium rounded-full transition-colors ${managementType === 'residential' ? 'text-white' : 'text-gray-600'}`}>
+                Residential
+              </button>
+              <span
+                className={`absolute top-1 left-1 w-32 h-10 bg-[var(--primary-color)] rounded-full transition-transform duration-300 ease-in-out ${managementType === 'residential' ? 'translate-x-full' : ''}`}>
+              </span>
+            </div>
+          </div>
           <div className="border-b border-gray-200 mb-6">
             <nav className="-mb-px flex space-x-4" aria-label="Tabs">
-                <TabButton tabName="builders" label="Builders" icon={HiOutlineOfficeBuilding} />
-                <TabButton tabName="estimators" label="Estimators" icon={HiOutlineUser} />
-                <TabButton tabName="supervisors" label="Supervisors" icon={HiOutlineUser} />
-                <TabButton tabName="locations" label="Locations" icon={HiOutlineLocationMarker} />
+              {managementType === 'commercial' ? (
+                <>
+                  <TabButton tabName="builders" label="Builders" icon={HiOutlineOfficeBuilding} />
+                  <TabButton tabName="estimators" label="Estimators" icon={HiOutlineUser} />
+                  <TabButton tabName="supervisors" label="Supervisors" icon={HiOutlineUser} />
+                  <TabButton tabName="locations" label="Locations" icon={HiOutlineLocationMarker} />
+                </>
+              ) : (
+                <>
+                  <TabButton tabName="builders" label="Builders" icon={HiOutlineOfficeBuilding} />
+                  <TabButton tabName="subcontractors" label="Subcontractors" icon={HiUsers} />
+                </>
+              )}
             </nav>
           </div>
 

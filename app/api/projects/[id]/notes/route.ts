@@ -20,10 +20,10 @@ export async function GET(
     
     const supabase = getDb();
     
-    // Get all notes for the project, ordered by newest first
+    // Get all notes for the project, with author's name, ordered by newest first
     const { data: notes, error } = await supabase
       .from('project_notes')
-      .select('id, project_id, content, author, timestamp')
+      .select('id, project_id, content, timestamp, users ( name )')
       .eq('project_id', projectId)
       .order('timestamp', { ascending: false });
     
@@ -36,13 +36,22 @@ export async function GET(
     }
     
     // Transform data to match expected format
-    const transformedNotes = (notes || []).map(note => ({
-      id: note.id,
-      project_id: note.project_id,
-      note_text: note.content,
-      author: note.author,
-      created_at: note.timestamp
-    }));
+    const transformedNotes = (notes || []).map((note: any) => {
+      let authorName = 'Unknown User';
+      if (note.users) {
+        const userData = Array.isArray(note.users) ? note.users[0] : note.users;
+        if (userData && typeof userData.name === 'string') {
+          authorName = userData.name;
+        }
+      }
+      return {
+        id: note.id,
+        project_id: note.project_id,
+        content: note.content,
+        author: authorName,
+        timestamp: note.timestamp
+      };
+    });
     
     return NextResponse.json(transformedNotes, { status: 200 });
   } catch (error) {
@@ -74,9 +83,9 @@ export async function POST(
     const data = await request.json();
     
     // Validate required fields
-    if (!data.note_text || !data.author) {
+    if (!data.content || !data.user_id) {
       return NextResponse.json(
-        { error: 'Note text and author are required' },
+        { error: 'Note content and user ID are required' },
         { status: 400 }
       );
     }
@@ -102,10 +111,10 @@ export async function POST(
       .from('project_notes')
       .insert({
         project_id: projectId,
-        content: data.note_text,
-        author: data.author
+        content: data.content,
+        user_id: data.user_id
       })
-      .select('id, project_id, content, author, timestamp')
+      .select('id, project_id, content, user_id, timestamp, users ( name )')
       .single();
 
     if (error) {
@@ -117,12 +126,19 @@ export async function POST(
     }
     
     // Transform the result to match expected format
+    let authorName = 'Unknown User';
+    if (result.users) {
+      const userData = Array.isArray(result.users) ? result.users[0] : result.users;
+      if (userData && typeof userData.name === 'string') {
+        authorName = userData.name;
+      }
+    }
     const newNote = {
       id: result.id,
       project_id: result.project_id,
-      note_text: result.content,
-      author: result.author,
-      created_at: result.timestamp || new Date().toISOString()
+      content: result.content,
+      author: authorName,
+      timestamp: result.timestamp || new Date().toISOString()
     };
     
     return NextResponse.json(

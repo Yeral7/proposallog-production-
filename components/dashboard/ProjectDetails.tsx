@@ -28,9 +28,10 @@ interface Drawing {
 
 interface Note {
   id: string;
-  text: string;
+  content: string;
   date: string;
   author: string;
+  user_id?: number; 
 }
 
 interface ProjectDetailsProps {
@@ -38,7 +39,7 @@ interface ProjectDetailsProps {
 }
 
 const ProjectDetails = ({ project }: ProjectDetailsProps) => {
-  const { canEditProjects } = useAuth();
+  const { canEditProjects, user } = useAuth();
   
   // Main State
   const [activeTab, setActiveTab] = useState<'contacts' | 'drawings' | 'notes'>('contacts');
@@ -59,7 +60,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
   // Data State for Forms
   const [currentContact, setCurrentContact] = useState<Partial<Contact>>({ name: '', title: '', phone: '', email: '' });
   const [currentDrawing, setCurrentDrawing] = useState<Partial<Drawing>>({ title: '', url: '' });
-  const [currentNote, setCurrentNote] = useState<Partial<Note>>({ text: '' });
+  const [currentNote, setCurrentNote] = useState<Partial<Note>>({ content: '' });
   
 
   // State for actions
@@ -105,11 +106,11 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
         const response = await fetchWithAuth(`/api/projects/${project.id}/notes`);
         if (response.ok) {
           const data = await response.json();
-          setNotes(data.map(note => ({
+          setNotes(data.map((note: any) => ({
             id: note.id.toString(),
-            text: note.note_text,
-            date: note.created_at || new Date().toISOString(),
-            author: note.author
+            content: note.content, 
+            date: note.timestamp || new Date().toISOString(),
+            author: note.author,
           })));
         } else {
           console.error('Failed to fetch notes');
@@ -299,13 +300,13 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
 
   const handleOpenNoteDialog = (note?: Note) => {
     setIsEditMode(!!note);
-    setCurrentNote(note || { text: '' });
+    setCurrentNote(note || { content: '' });
     setShowNoteDialog(true);
   };
 
   const handleSaveNote = async () => {
-    if (!currentNote.text?.trim()) {
-      setError('Note text cannot be empty.');
+    if (!currentNote.content?.trim()) {
+      setError('Note content cannot be empty.');
       return;
     }
     setError('');
@@ -314,8 +315,8 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
       const response = await fetchWithAuth(`/api/projects/${project.id}/notes`, {
         method: 'POST',
         body: JSON.stringify({
-          note_text: currentNote.text,
-          author: 'Admin' // Replace with actual user later
+          content: currentNote.content,
+          user_id: user?.id
         }),
       });
 
@@ -337,31 +338,29 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
       
       const newNote: Note = {
         id: newNoteFromApi.id.toString(),
-        text: newNoteFromApi.note_text,
-        date: newNoteFromApi.created_at || new Date().toISOString(),
+        content: newNoteFromApi.content,
+        date: newNoteFromApi.timestamp || new Date().toISOString(),
         author: newNoteFromApi.author,
       };
 
       if (isEditMode && currentNote.id) {
         setNotes(notes.map(n => (n.id === currentNote.id ? newNote : n)));
         
-        // Log audit action for edit
         await logClientAuditAction({
           page: 'Project Details',
-          action: `Updated note in project "${project.project_name}": "${currentNote.text?.substring(0, 100)}${currentNote.text && currentNote.text.length > 100 ? '...' : ''}"`
+          action: `Updated note in project "${project.project_name}": "${currentNote.content?.substring(0, 100)}${currentNote.content && currentNote.content.length > 100 ? '...' : ''}"`
         });
       } else {
         setNotes([newNote, ...notes]);
         
-        // Log audit action for add
         await logClientAuditAction({
           page: 'Project Details',
-          action: `Added note to project "${project.project_name}": "${currentNote.text?.substring(0, 100)}${currentNote.text && currentNote.text.length > 100 ? '...' : ''}"`
+          action: `Added note to project "${project.project_name}": "${currentNote.content?.substring(0, 100)}${currentNote.content && currentNote.content.length > 100 ? '...' : ''}"`
         });
       }
 
       setShowNoteDialog(false);
-      setCurrentNote({ text: '' });
+      setCurrentNote({ content: '' });
 
     } catch (err) {
       console.error('Error saving note:', err);
@@ -399,7 +398,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           setDrawings(drawings.filter(d => d.id !== id));
         } else if (type === 'notes') {
           const note = notes.find(n => n.id === id);
-          itemName = note?.text?.substring(0, 50) + (note?.text && note.text.length > 50 ? '...' : '') || 'Unknown Note';
+          itemName = note?.content?.substring(0, 50) + (note?.content && note.content.length > 50 ? '...' : '') || 'Unknown Note';
           setNotes(notes.filter(n => n.id !== id));
         }
         
@@ -602,7 +601,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
                         <time dateTime={note.date}>{formatDateTimeToCharlotte(note.date)}</time>
                       </div>
                       <div className="mt-2 text-sm text-gray-700 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                        <p className="whitespace-pre-wrap">{note.text}</p>
+                        <p className="whitespace-pre-wrap">{note.content}</p>
                       </div>
                     </div>
                      <div className="flex-shrink-0 self-center">
@@ -688,14 +687,14 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
             <div className="relative">
               <textarea 
                 placeholder="Write your note here..."
-                value={currentNote.text}
-                onChange={(e) => setCurrentNote({ ...currentNote, text: e.target.value })}
+                value={currentNote.content || ''}
+                onChange={(e) => setCurrentNote({ ...currentNote, content: e.target.value })}
                 className="border p-3 w-full rounded-md focus:ring-2 focus:ring-gray-500 focus:outline-none transition-shadow duration-200"
                 rows={8}
                 maxLength={1000}
               ></textarea>
               <div className="text-right text-sm text-gray-500 mt-1">
-                {currentNote.text?.length || 0} / 1000
+                {currentNote.content?.length || 0} / 1000
               </div>
             </div>
             <div className="flex justify-end mt-6 space-x-3">

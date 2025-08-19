@@ -14,7 +14,8 @@ export async function GET() {
         estimators:estimator_id(name),
         supervisors:supervisor_id(name),
         statuses:status_id(label),
-        locations:location_id(name)
+        locations:location_id(name),
+        priorities:priority_id(name)
       `);
     
     if (error) {
@@ -44,7 +45,8 @@ export async function GET() {
       follow_up_date: project.follow_up_date,
       contract_value: project.contract_value,
       reference_project_id: project.reference_project_id,
-      priority: project.priority
+      priority_id: project.priority_id,
+      priority_name: project.priorities?.name || 'Not Set'
     }));
     
     return NextResponse.json(formattedProjects);
@@ -83,7 +85,7 @@ export async function POST(request: Request) {
       follow_up_date: data.follow_up_date || null,
       contract_value: data.contract_value || null,
       reference_project_id: data.reference_project_id || null,
-      priority: data.priority || null
+      priority_id: data.priority_id || null
     };
 
     const { data: result, error } = await db

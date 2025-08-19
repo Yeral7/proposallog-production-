@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { fetchWithAuth } from '@/lib/apiClient';
 import { HiPlus, HiOutlineViewGrid, HiSearch, HiFilter, HiDocumentDuplicate } from "react-icons/hi";
 import Banner from "../../components/Banner";
@@ -135,6 +137,7 @@ export default function ProposalLogPage() {
     if (filters.supervisorId) result = result.filter(p => p.supervisor_id?.toString() === filters.supervisorId);
     if (filters.statusId) result = result.filter(p => p.status_id?.toString() === filters.statusId);
     if (filters.locationId) result = result.filter(p => p.location_id?.toString() === filters.locationId);
+    if (filters.priorityId) result = result.filter(p => p.priority_id?.toString() === filters.priorityId);
 
     if (filters.dueDate) {
       result = result.filter(p => {
@@ -147,15 +150,15 @@ export default function ProposalLogPage() {
 
     // Apply sorting
     if (sortField === 'priority' && prioritySortCycle > 0) {
-      const priorityOrder = ['Overdue', 'High', 'Medium', 'Low', null];
+      const priorityOrder = ['Overdue', 'High', 'Medium', 'Low', 'Not Set', null];
       const topPriorityIndex = prioritySortCycle - 1;
       const rotatedOrder = [...priorityOrder.slice(topPriorityIndex), ...priorityOrder.slice(0, topPriorityIndex)];
-      const getSortValue = (priority?: string | null): number => {
-        const p = priority || null;
+      const getSortValue = (priority_name?: string | null): number => {
+        const p = priority_name || null;
         const index = rotatedOrder.indexOf(p as any);
         return index === -1 ? rotatedOrder.length : index;
       };
-      result.sort((a, b) => getSortValue(a.priority) - getSortValue(b.priority));
+      result.sort((a, b) => getSortValue(a.priority_name) - getSortValue(b.priority_name));
     } else if (sortField && sortDirection) {
       result.sort((a, b) => {
         // Map of sort fields to the actual property names in the Project object
@@ -319,6 +322,17 @@ export default function ProposalLogPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-accent">
+      <ToastContainer 
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
       <Header />
       <div className="relative">
         <Banner title="Proposal Log" icon={<HiOutlineViewGrid className="w-10 h-10" />} />
@@ -453,23 +467,6 @@ export default function ProposalLogPage() {
         </div>
       </main>
       
-      {/* Notification toast */}
-      {notification && (
-        <div className="fixed bottom-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg z-50 flex items-center">
-          <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-          </svg>
-          <span>{notification}</span>
-          <button 
-            onClick={() => setNotification(null)} 
-            className="ml-4 text-green-700 hover:text-green-900"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
       
       {/* Modals */}
       <AddProjectModal 

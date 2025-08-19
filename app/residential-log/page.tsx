@@ -1,18 +1,22 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { HiPlus, HiOutlineViewGrid, HiSearch, HiFilter, HiDocumentDuplicate } from "react-icons/hi";
+import { HiPlus, HiOutlineViewGrid, HiSearch, HiFilter, HiDocumentDuplicate, HiX } from "react-icons/hi";
 import Banner from "../../components/Banner";
 import Header from "../../components/Header";
 import ResidentialLogTable, { ResidentialProject, SortField, SortDirection } from "../../components/dashboard/ResidentialLogTable";
 import AddProjectModal from "../../components/dashboard/AddProjectModal";
 import ImportProjectModal from "../../components/dashboard/ImportProjectModal";
 
-import EditProjectModal from "../../components/dashboard/EditProjectModal";
 import FilterProjectsModal, { FilterOptions } from "../../components/dashboard/FilterProjectsModal";
-import ProjectDetails from "../../components/dashboard/ProjectDetails";
+import EditResidentialProjectModal from "../../components/dashboard/EditResidentialProjectModal";
 import UpcomingSchedule from '../../components/dashboard/UpcomingSchedule';
 import OngoingResidentialProjects from '../../components/dashboard/OngoingResidentialProjects';
+import AddResidentialProjectModal from "../../components/dashboard/AddResidentialProjectModal";
+import { fetchWithAuth } from '../../lib/apiClient';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import ConfirmDeleteModal from '../../components/common/ConfirmDeleteModal';
 
 export default function ResidentialLogPage() {
   const [projects, setProjects] = useState<ResidentialProject[]>([]);
@@ -24,8 +28,12 @@ export default function ResidentialLogPage() {
   
   // Modal states
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'schedule', 'ongoing'
-  const projectDetailsRef = React.useRef<HTMLDivElement>(null);
+  const [selectedProject, setSelectedProject] = useState<ResidentialProject | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<ResidentialProject | null>(null);
   
   // Search and filter states
   const [searchText, setSearchText] = useState('');
@@ -62,16 +70,37 @@ export default function ResidentialLogPage() {
       setIsRefreshing(true);
     }
     
-    // Data fetching is removed. We will use a different table for this.
-    // When actual data fetching is implemented, it will go here
-    setProjects([]); 
-    setLastRefreshTime(new Date());
-    
-    if (!silent) {
-      setIsLoading(false);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Authentication token not found. Please log in again.');
+        setIsLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/residential-projects', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch projects: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setProjects(data || []);
+      setLastRefreshTime(new Date());
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching residential projects:', err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      if (!silent) {
+        setIsLoading(false);
+      }
+      setIsRefreshing(false);
     }
-    setIsRefreshing(false);
-    setError(null);
   };
 
   const filteredProjects = useMemo(() => {
@@ -114,18 +143,60 @@ export default function ResidentialLogPage() {
   };
 
   const handleEditProject = (project: ResidentialProject) => {
-    // TODO: Implement edit functionality with a new modal
-    console.log('Editing project:', project);
+    setSelectedProject(project);
+    setIsEditModalOpen(true);
   };
 
   const handleProjectUpdated = () => {
     fetchProjects();
+    setIsEditModalOpen(false);
+  };
+
+  const handleDeleteProject = (project: ResidentialProject) => {
+    setProjectToDelete(project);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!projectToDelete) return;
+
+    try {
+      const response = await fetchWithAuth(`/api/residential-projects/${projectToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete project');
+      }
+
+      toast.success(`Project "${projectToDelete.project_name}" deleted successfully.`);
+      fetchProjects(); // Refresh the list
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An unknown error occurred';
+      toast.error(message);
+      setError(message);
+    } finally {
+      setIsDeleteModalOpen(false);
+      setProjectToDelete(null);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ToastContainer 
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
       <Header />
-      <Banner title="Residential Log" icon={<HiOutlineViewGrid />} />
+      <Banner title="Residential" icon={<HiOutlineViewGrid />} />
       <main className="flex-1 p-4 sm:p-6 lg:p-8">
         <div className="max-w-full mx-auto">
           <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
@@ -136,13 +207,20 @@ export default function ResidentialLogPage() {
                   <span>Last updated: {lastRefreshTime.toLocaleTimeString()}</span>
                   {isRefreshing && (
                     <span className="ml-2 inline-block">
-                      <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-blue-500"></div>
+                      <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-gray-600"></div>
                     </span>
                   )}
                 </div>
               )}
             </div>
             <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setIsAddModalOpen(true)}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-[var(--primary-color)] hover:bg-[var(--secondary-color)] text-white rounded-md flex items-center gap-2 shadow-sm justify-center"
+              >
+                <HiPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                Add Project
+              </button>
               <button 
                 onClick={() => setIsFilterModalOpen(true)}
                 className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base border border-gray-300 bg-white text-gray-700 rounded-md flex items-center gap-2 shadow-sm hover:bg-gray-50"
@@ -193,7 +271,7 @@ export default function ResidentialLogPage() {
           )}
           {isLoading ? (
             <div className="flex justify-center items-center h-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-600"></div>
             </div>
           ) : (
             <div>
@@ -214,6 +292,7 @@ export default function ResidentialLogPage() {
                   <ResidentialLogTable 
                     projects={currentProjects}
                     onEdit={handleEditProject}
+                    onDelete={handleDeleteProject}
                     onSort={handleSort}
                     sortField={sortField}
                     sortDirection={sortDirection}
@@ -237,6 +316,28 @@ export default function ResidentialLogPage() {
         onClose={() => setIsFilterModalOpen(false)}
         onApplyFilters={(newFilters) => setFilters(newFilters)}
         currentFilters={filters}
+      />
+
+      <AddResidentialProjectModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onProjectAdded={handleProjectAdded}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        title="Delete Residential Project"
+        message={`Are you sure you want to delete the project "${projectToDelete?.project_name}"? This action cannot be undone.`}
+        loading={isLoading}
+      />
+
+      <EditResidentialProjectModal 
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onProjectUpdated={handleProjectUpdated}
+        project={selectedProject}
       />
     </div>
   );

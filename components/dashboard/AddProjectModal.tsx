@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { HiX } from 'react-icons/hi';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { fetchWithAuth } from '@/lib/apiClient';
 
 interface Builder {
@@ -25,6 +27,11 @@ interface Status {
 }
 
 interface Location {
+  id: number;
+  name: string;
+}
+
+interface Priority {
   id: number;
   name: string;
 }
@@ -55,7 +62,8 @@ interface Project {
   follow_up_date?: string | null;
   contract_value: number | null;
   reference_project_id?: number | null;
-  priority?: string | null;
+  priority_id: number | null;
+  priority_name: string | null;
 }
 
 export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: AddProjectModalProps) {
@@ -64,6 +72,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [priorities, setPriorities] = useState<Priority[]>([]);
   const [existingProjects, setExistingProjects] = useState<Project[]>([]);
   
   const [loading, setLoading] = useState(false);
@@ -82,7 +91,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
   const [contractValue, setContractValue] = useState('');
   const [noContractValue, setNoContractValue] = useState(false);
   const [noDueDate, setNoDueDate] = useState(false);
-  const [priority, setPriority] = useState<string>('');
+  const [priorityId, setPriorityId] = useState('');
   const [submissionDate, setSubmissionDate] = useState('');
 
   // Fetch dropdown data when modal opens
@@ -150,6 +159,9 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
 
       const locations = await fetchData('/api/locations', 'Locations');
       setLocations(locations);
+
+      const priorities = await fetchData('/api/priorities', 'Priorities');
+      setPriorities(priorities);
       
       // Fetch existing projects for reference selection
       const projects = await fetchData('/api/projects', 'Projects');
@@ -176,7 +188,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
     setNoContractValue(false);
     setDueDate('');
     setNoDueDate(false);
-    setPriority('');
+    setPriorityId('');
     setSubmissionDate('');
     setIsMultipleBuilder(false);
     setReferenceProjectId('');
@@ -220,7 +232,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
       due_date: noDueDate ? null : dueDate,
       contract_value: noContractValue || !contractValue ? null : parseFloat(contractValue),
       reference_project_id: isMultipleBuilder && referenceProjectId ? parseInt(referenceProjectId) : null,
-      priority: priority || null,
+      priority_id: priorityId ? parseInt(priorityId) : null,
       submission_date: submissionDate || null,
     };
 
@@ -235,6 +247,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
         throw new Error(errorData.error || 'Failed to add project');
       }
 
+      toast.success(`Project "${projectName}" added successfully.`);
       resetForm();
       onProjectAdded(projectName);
       onClose();
@@ -305,6 +318,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
                           setStatusId(selectedProject.status_id.toString());
                           setLocationId(selectedProject.location_id?.toString() || '');
                           setDueDate(selectedProject.due_date);
+                          setPriorityId(selectedProject.priority_id?.toString() || '');
                           
                           if (selectedProject.contract_value === null) {
                             setNoContractValue(true);
@@ -447,20 +461,21 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
             </div>
 
             <div>
-              <label htmlFor="priority" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="priorityId" className="block text-sm font-medium text-gray-700">
                 Priority
               </label>
               <select
-                id="priority"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
+                id="priorityId"
+                value={priorityId}
+                onChange={(e) => setPriorityId(e.target.value)}
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">Not Set</option>
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-                <option value="Overdue">Overdue</option>
+                <option value="">Select Priority</option>
+                {priorities.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
             </div>
 

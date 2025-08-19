@@ -6,12 +6,12 @@ export async function GET() {
     const supabase = getDb();
     const { data: statuses, error } = await supabase.from('statuses').select('id, label').order('label');
     if (error) throw error;
-    return NextResponse.json(statuses);
+    
+    // Make sure we always return an array
+    return NextResponse.json(Array.isArray(statuses) ? statuses : []);
   } catch (error) {
     console.error('Error fetching statuses:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch statuses' },
-      { status: 500 }
-    );
+    // Return an empty array on error instead of error object
+    return NextResponse.json([]);
   }
 }

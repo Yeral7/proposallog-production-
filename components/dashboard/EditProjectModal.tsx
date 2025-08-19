@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { HiX } from 'react-icons/hi';
 import type { Project } from './ProposalTable';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { fetchWithAuth } from '@/lib/apiClient';
 
 interface Builder {
@@ -30,6 +32,11 @@ interface Location {
   name: string;
 }
 
+interface Priority {
+  id: number;
+  name: string;
+}
+
 // Division interface removed
 
 interface EditProjectModalProps {
@@ -46,6 +53,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [priorities, setPriorities] = useState<Priority[]>([]);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +69,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
   const [noDueDate, setNoDueDate] = useState(false);
   const [contractValue, setContractValue] = useState('');
   const [noContractValue, setNoContractValue] = useState(false);
-  const [priority, setPriority] = useState('');
+  const [priorityId, setPriorityId] = useState('');
   const [submissionDate, setSubmissionDate] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
 
@@ -99,7 +107,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
     if (project && isVisible) {
       populateForm();
     }
-  }, [project, isVisible, builders, estimators, statuses, supervisors, locations]);
+  }, [project, isVisible, builders, estimators, statuses, supervisors, locations, priorities]);
 
   // Populate the form with project data
   const populateForm = () => {
@@ -125,7 +133,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
       setContractValue(project.contract_value.toString());
     }
 
-    setPriority(project.priority || '');
+    setPriorityId(project.priority_id?.toString() || '');
 
     if (project.submission_date) {
       setSubmissionDate(project.submission_date);
@@ -231,6 +239,9 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
 
       const locations = await fetchData('/api/locations', 'Locations');
       setLocations(locations);
+
+      const priorities = await fetchData('/api/priorities', 'Priorities');
+      setPriorities(priorities);
       
       // Clear any previous error
       setError(null);
@@ -261,6 +272,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
         throw new Error(errorMessage);
       }
 
+      toast.success(`Project "${project.project_name}" deleted successfully.`);
       onProjectUpdated(project.project_name, `Deleted project: "${project.project_name}"`);
       onClose();
     } catch (err) {
@@ -307,7 +319,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
       location_id: locationId ? parseInt(locationId) : null,
       due_date: noDueDate ? null : dueDate,
       contract_value: noContractValue || !contractValue ? null : parseFloat(contractValue),
-      priority: priority || null,
+      priority_id: priorityId ? parseInt(priorityId) : null,
       submission_date: submissionDate || null,
       follow_up_date: followUpDate || null,
     };
@@ -323,6 +335,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
         throw new Error(errorData.error || 'Failed to update project');
       }
 
+      toast.success(`Project "${projectName}" updated successfully.`);
       onProjectUpdated(projectName, `Updated project: "${projectName}"`);
       onClose();
 
@@ -467,18 +480,19 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
                 </div>
 
                 <div>
-                  <label htmlFor="priority" className="block text-sm font-medium text-gray-700">Priority</label>
+                  <label htmlFor="priorityId" className="block text-sm font-medium text-gray-700">Priority</label>
                   <select
-                    id="priority"
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value)}
+                    id="priorityId"
+                    value={priorityId}
+                    onChange={(e) => setPriorityId(e.target.value)}
                     className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="">Not Set</option>
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Overdue">Overdue</option>
+                    <option value="">Select Priority</option>
+                    {priorities.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

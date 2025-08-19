@@ -6,12 +6,12 @@ export async function GET() {
     const supabase = getDb();
     const { data: builders, error } = await supabase.from('builders').select('id, name').order('name');
     if (error) throw error;
-    return NextResponse.json(builders);
+    
+    // Make sure we always return an array
+    return NextResponse.json(Array.isArray(builders) ? builders : []);
   } catch (error) {
     console.error('Error fetching builders:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch builders' },
-      { status: 500 }
-    );
+    // Return an empty array on error instead of error object
+    return NextResponse.json([]);
   }
 }

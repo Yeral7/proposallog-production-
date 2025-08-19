@@ -1,16 +1,20 @@
 import React from 'react';
-import { HiPencil, HiChevronUp, HiChevronDown, HiSelector } from 'react-icons/hi';
+import { HiPencil, HiTrash, HiChevronUp, HiChevronDown, HiSelector } from 'react-icons/hi';
 
 // Define the type for a single project, including the joined data
 export interface ResidentialProject {
   id: number;
   project_name: string;
-  builder: string;
-  subcontractor: string;
+  builder: { id: number; name: string } | null;
+  subcontractor_id: number | null;
+  subcontractor: { id: number; name: string } | null;
   start_date: string | null;
   est_completion_date: string | null;
   contract_value: number | null;
   status: string;
+  priority: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export type SortDirection = 'asc' | 'desc' | null;
@@ -19,6 +23,7 @@ export type SortField = 'project_name' | 'builder' | 'subcontractor' | 'start_da
 interface ResidentialLogTableProps {
   projects: ResidentialProject[];
   onEdit: (project: ResidentialProject) => void;
+  onDelete: (project: ResidentialProject) => void;
   onSort?: (field: SortField, direction: SortDirection) => void;
   sortField?: SortField;
   sortDirection?: SortDirection;
@@ -30,6 +35,7 @@ interface ResidentialLogTableProps {
 const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({ 
   projects, 
   onEdit, 
+  onDelete,
   onSort = () => {},
   sortField = null,
   sortDirection = null,
@@ -110,23 +116,30 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
           </thead>
           <tbody className="divide-y divide-gray-200">
             {projects.map((project) => (
-              <tr key={project.id} className="hover:bg-gray-100">
+              <tr key={project.id} className="hover:bg-gray-50">
                 <td className="py-4 px-4">
                   <div className="flex items-center space-x-2">
                     <button 
                       onClick={() => onEdit(project)}
-                      className="text-gray-600 hover:text-blue-700 p-1 rounded-full transition-colors"
+                      className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
                       title="Edit Project"
                     >
                       <HiPencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => onDelete(project)}
+                      className="p-1 bg-red-200 rounded-md text-red-600 hover:bg-red-300"
+                      title="Delete Project"
+                    >
+                      <HiTrash className="w-4 h-4" />
                     </button>
                   </div>
                 </td>
                 <td className="py-4 px-4">
                   <span className="font-medium text-gray-800">{project.project_name}</span>
                 </td>
-                <td className="py-4 px-4">{project.builder}</td>
-                <td className="py-4 px-4">{project.subcontractor}</td>
+                <td className="py-4 px-4">{project.builder?.name || 'N/A'}</td>
+                <td className="py-4 px-4">{project.subcontractor?.name || 'N/A'}</td>
                 <td className="py-4 px-4">
                   {project.start_date ? new Date(project.start_date).toLocaleDateString() : 'N/A'}
                 </td>
