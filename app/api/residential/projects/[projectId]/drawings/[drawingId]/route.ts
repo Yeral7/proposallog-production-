@@ -1,28 +1,29 @@
-import { NextResponse } from 'next/server';
-import { openDb } from '../../../../../../../db';
-import { authenticate } from '@/lib/auth';
+import { NextResponse, NextRequest } from 'next/server';
+import { getDb } from '@/lib/db';
+import { getVerifiedSession } from '@/lib/auth';
 
 // GET /api/residential/projects/[projectId]/drawings/[drawingId] - Get a specific drawing
 export async function GET(
-  request: Request,
-  { params }: { params: { projectId: string, drawingId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string, drawingId: string }> }
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { projectId, drawingId } = params;
-    const db = await openDb();
+    const { projectId, drawingId } = await params;
+    const supabase = getDb();
     
-    // Get the specific drawing for the project
-    const drawing = await db.get(`
-      SELECT * FROM residential_project_drawings
-      WHERE id = ? AND project_id = ?
-    `, [drawingId, projectId]);
+    const { data: drawing, error } = await supabase
+      .from('residential_project_drawings')
+      .select('*')
+      .eq('id', drawingId)
+      .eq('project_id', projectId)
+      .single();
 
-    if (!drawing) {
+    if (error || !drawing) {
       return NextResponse.json({ message: 'Drawing not found' }, { status: 404 });
     }
 
@@ -35,65 +36,48 @@ export async function GET(
 
 // PUT /api/residential/projects/[projectId]/drawings/[drawingId] - Update a specific drawing
 export async function PUT(
-  request: Request,
-  { params }: { params: { projectId: string, drawingId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string, drawingId: string }> }
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { projectId, drawingId } = params;
+    const { projectId, drawingId } = await params;
     const data = await request.json();
     
-    // Validate required fields
     if (!data.drawing_name) {
       return NextResponse.json({ message: 'Drawing name is required' }, { status: 400 });
     }
 
-    const db = await openDb();
+    const supabase = getDb();
     
-    // Check if the drawing exists for the specific project
-    const drawing = await db.get(`
-      SELECT * FROM residential_project_drawings
-      WHERE id = ? AND project_id = ?
-    `, [drawingId, projectId]);
+    const { data: updatedDrawing, error } = await supabase
+      .from('residential_project_drawings')
+      .update({
+        drawing_name: data.drawing_name,
+        drawing_number: data.drawing_number || null,
+        drawing_type: data.drawing_type || null,
+        drawing_date: data.drawing_date || null,
+        drawing_url: data.drawing_url || null,
+        notes: data.notes || null,
+        updated_by: session.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', drawingId)
+      .eq('project_id', projectId)
+      .select()
+      .single();
 
-    if (!drawing) {
-      return NextResponse.json({ message: 'Drawing not found' }, { status: 404 });
+    if (error) {
+      console.error('Error updating drawing:', error);
+      if (error.code === 'PGRST204') {
+        return NextResponse.json({ message: 'Drawing not found' }, { status: 404 });
+      }
+      return NextResponse.json({ message: 'Failed to update drawing' }, { status: 500 });
     }
-    
-    // Update the drawing
-    await db.run(`
-      UPDATE residential_project_drawings
-      SET 
-        drawing_name = ?,
-        drawing_number = ?,
-        drawing_type = ?,
-        drawing_date = ?,
-        drawing_url = ?,
-        notes = ?,
-        updated_by = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND project_id = ?
-    `, [
-      data.drawing_name,
-      data.drawing_number || null,
-      data.drawing_type || null,
-      data.drawing_date || null,
-      data.drawing_url || null,
-      data.notes || null,
-      user.id,
-      drawingId,
-      projectId
-    ]);
-    
-    // Get the updated drawing
-    const updatedDrawing = await db.get(`
-      SELECT * FROM residential_project_drawings
-      WHERE id = ?
-    `, [drawingId]);
     
     return NextResponse.json(updatedDrawing);
   } catch (error) {
@@ -104,33 +88,28 @@ export async function PUT(
 
 // DELETE /api/residential/projects/[projectId]/drawings/[drawingId] - Delete a specific drawing
 export async function DELETE(
-  request: Request,
-  { params }: { params: { projectId: string, drawingId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string, drawingId: string }> }
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { projectId, drawingId } = params;
-    const db = await openDb();
+    const { projectId, drawingId } = await params;
+    const supabase = getDb();
     
-    // Check if the drawing exists for the specific project
-    const drawing = await db.get(`
-      SELECT * FROM residential_project_drawings
-      WHERE id = ? AND project_id = ?
-    `, [drawingId, projectId]);
+    const { error } = await supabase
+      .from('residential_project_drawings')
+      .delete()
+      .eq('id', drawingId)
+      .eq('project_id', projectId);
 
-    if (!drawing) {
-      return NextResponse.json({ message: 'Drawing not found' }, { status: 404 });
+    if (error) {
+      console.error('Error deleting drawing:', error);
+      return NextResponse.json({ message: 'Failed to delete drawing' }, { status: 500 });
     }
-    
-    // Delete the drawing
-    await db.run(`
-      DELETE FROM residential_project_drawings
-      WHERE id = ? AND project_id = ?
-    `, [drawingId, projectId]);
     
     return NextResponse.json({ message: 'Drawing deleted successfully' });
   } catch (error) {

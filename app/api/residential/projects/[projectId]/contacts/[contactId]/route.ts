@@ -1,138 +1,140 @@
-import { NextResponse } from 'next/server';
-import { openDb } from '../../../../../../../db';
-import { authenticate } from '@/lib/auth';
+import { NextResponse, NextRequest } from 'next/server';
+import { getDb } from '@/lib/db';
+import { getVerifiedSession } from '@/lib/auth';
 
 // GET /api/residential/projects/[projectId]/contacts/[contactId] - Get a specific contact
 export async function GET(
-  request: Request,
-  { params }: { params: { projectId: string, contactId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string; contactId: string }> },
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { projectId, contactId } = params;
-    const db = await openDb();
-    
-    // Get the specific contact for the project
-    const contact = await db.get(`
-      SELECT * FROM residential_project_contacts
-      WHERE id = ? AND project_id = ?
-    `, [contactId, projectId]);
+    const { projectId, contactId } = await params;
+    const supabase = getDb();
 
-    if (!contact) {
+    const { data: contact, error } = await supabase
+      .from('residential_project_contacts')
+      .select('*')
+      .eq('id', contactId)
+      .eq('project_id', projectId)
+      .single();
+
+    if (error || !contact) {
       return NextResponse.json({ message: 'Contact not found' }, { status: 404 });
     }
 
     return NextResponse.json(contact);
   } catch (error) {
     console.error('Error fetching contact:', error);
-    return NextResponse.json({ message: 'Failed to fetch contact' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Failed to fetch contact' },
+      { status: 500 },
+    );
   }
 }
 
 // PUT /api/residential/projects/[projectId]/contacts/[contactId] - Update a specific contact
 export async function PUT(
-  request: Request,
-  { params }: { params: { projectId: string, contactId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string; contactId: string }> },
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { projectId, contactId } = params;
+    const { projectId, contactId } = await params;
     const data = await request.json();
-    
-    // Validate required fields
+
     if (!data.name) {
-      return NextResponse.json({ message: 'Contact name is required' }, { status: 400 });
+      return NextResponse.json(
+        { message: 'Contact name is required' },
+        { status: 400 },
+      );
     }
 
-    const db = await openDb();
-    
-    // Check if the contact exists for the specific project
-    const contact = await db.get(`
-      SELECT * FROM residential_project_contacts
-      WHERE id = ? AND project_id = ?
-    `, [contactId, projectId]);
+    const supabase = getDb();
 
-    if (!contact) {
-      return NextResponse.json({ message: 'Contact not found' }, { status: 404 });
+    const { data: updatedContact, error } = await supabase
+      .from('residential_project_contacts')
+      .update({
+        name: data.name,
+        company: data.company || null,
+        role: data.role || null,
+        phone: data.phone || null,
+        email: data.email || null,
+        updated_by: session.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', contactId)
+      .eq('project_id', projectId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating contact:', error);
+      // PostgREST error `PGRST204` indicates no rows were found
+      if (error.code === 'PGRST204') {
+        return NextResponse.json(
+          { message: 'Contact not found' },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json(
+        { message: 'Failed to update contact' },
+        { status: 500 },
+      );
     }
-    
-    // Update the contact
-    await db.run(`
-      UPDATE residential_project_contacts
-      SET 
-        name = ?,
-        company = ?,
-        role = ?,
-        phone = ?,
-        email = ?,
-        updated_by = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND project_id = ?
-    `, [
-      data.name,
-      data.company || null,
-      data.role || null,
-      data.phone || null,
-      data.email || null,
-      user.id,
-      contactId,
-      projectId
-    ]);
-    
-    // Get the updated contact
-    const updatedContact = await db.get(`
-      SELECT * FROM residential_project_contacts
-      WHERE id = ?
-    `, [contactId]);
-    
+
     return NextResponse.json(updatedContact);
   } catch (error) {
     console.error('Error updating contact:', error);
-    return NextResponse.json({ message: 'Failed to update contact' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Failed to update contact' },
+      { status: 500 },
+    );
   }
 }
 
 // DELETE /api/residential/projects/[projectId]/contacts/[contactId] - Delete a specific contact
 export async function DELETE(
-  request: Request,
-  { params }: { params: { projectId: string, contactId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string; contactId: string }> },
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { projectId, contactId } = params;
-    const db = await openDb();
-    
-    // Check if the contact exists for the specific project
-    const contact = await db.get(`
-      SELECT * FROM residential_project_contacts
-      WHERE id = ? AND project_id = ?
-    `, [contactId, projectId]);
+    const { projectId, contactId } = await params;
+    const supabase = getDb();
 
-    if (!contact) {
-      return NextResponse.json({ message: 'Contact not found' }, { status: 404 });
+    const { error } = await supabase
+      .from('residential_project_contacts')
+      .delete()
+      .eq('id', contactId)
+      .eq('project_id', projectId);
+
+    if (error) {
+      console.error('Error deleting contact:', error);
+      return NextResponse.json(
+        { message: 'Failed to delete contact' },
+        { status: 500 },
+      );
     }
-    
-    // Delete the contact
-    await db.run(`
-      DELETE FROM residential_project_contacts
-      WHERE id = ? AND project_id = ?
-    `, [contactId, projectId]);
-    
+
     return NextResponse.json({ message: 'Contact deleted successfully' });
   } catch (error) {
     console.error('Error deleting contact:', error);
-    return NextResponse.json({ message: 'Failed to delete contact' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Failed to delete contact' },
+      { status: 500 },
+    );
   }
 }

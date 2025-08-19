@@ -1,29 +1,31 @@
-import { NextResponse } from 'next/server';
-import { openDb } from '../../../../../../db';
-import { authenticate } from '@/lib/auth';
+import { NextResponse, NextRequest } from 'next/server';
+import { getDb } from '@/lib/db';
+import { getVerifiedSession } from '@/lib/auth';
 
 // GET /api/residential/projects/[projectId]/notes - Get all notes for a specific project
 export async function GET(
-  request: Request,
-  { params }: { params: { projectId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.projectId;
-    const db = await openDb();
+    const { projectId } = await params;
+    const supabase = getDb();
     
-    // Get the notes for the specific project
-    const notes = await db.all(`
-      SELECT rn.*, u.name as author_name
-      FROM residential_project_notes rn
-      LEFT JOIN users u ON rn.created_by = u.id
-      WHERE rn.project_id = ?
-      ORDER BY rn.created_at DESC
-    `, [projectId]);
+    const { data: notes, error } = await supabase
+      .from('residential_project_notes')
+      .select('*, author:users(name)')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching notes:', error);
+      return NextResponse.json({ message: 'Failed to fetch notes' }, { status: 500 });
+    }
 
     return NextResponse.json(notes);
   } catch (error) {
@@ -34,16 +36,16 @@ export async function GET(
 
 // POST /api/residential/projects/[projectId]/notes - Add a new note to a project
 export async function POST(
-  request: Request,
-  { params }: { params: { projectId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.projectId;
+    const { projectId } = await params;
     const data = await request.json();
     
     // Validate required fields
@@ -51,35 +53,34 @@ export async function POST(
       return NextResponse.json({ message: 'Note text is required' }, { status: 400 });
     }
 
-    const db = await openDb();
+    const supabase = getDb();
     
     // Check if the project exists
-    const project = await db.get('SELECT id FROM residential_projects WHERE id = ?', [projectId]);
-    if (!project) {
+    const { data: project, error: projectError } = await supabase
+      .from('residential_projects')
+      .select('id')
+      .eq('id', projectId)
+      .single();
+
+    if (projectError || !project) {
       return NextResponse.json({ message: 'Project not found' }, { status: 404 });
     }
     
     // Insert the new note
-    const result = await db.run(`
-      INSERT INTO residential_project_notes (
-        project_id,
-        note_text,
-        created_by,
-        created_at
-      ) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    `, [
-      projectId,
-      data.note_text.trim(),
-      user.id
-    ]);
-    
-    // Get the newly created note with author name
-    const newNote = await db.get(`
-      SELECT n.*, u.name as author_name
-      FROM residential_project_notes n
-      LEFT JOIN users u ON n.created_by = u.id
-      WHERE n.id = ?
-    `, result.lastID);
+    const { data: newNote, error: insertError } = await supabase
+      .from('residential_project_notes')
+      .insert({
+        project_id: projectId,
+        note_text: data.note_text.trim(),
+        created_by: session.id
+      })
+      .select('*, author:users(name)')
+      .single();
+
+    if (insertError) {
+      console.error('Error creating note:', insertError);
+      return NextResponse.json({ message: 'Failed to create note' }, { status: 500 });
+    }
     
     return NextResponse.json(newNote, { status: 201 });
   } catch (error) {

@@ -1,27 +1,31 @@
-import { NextResponse } from 'next/server';
-import { openDb } from '../../../../../../db';
-import { authenticate } from '@/lib/auth';
+import { NextResponse, NextRequest } from 'next/server';
+import { getDb } from '@/lib/db';
+import { getVerifiedSession } from '@/lib/auth';
 
 // GET /api/residential/projects/[projectId]/drawings - Get all drawings for a specific project
 export async function GET(
-  request: Request,
-  { params }: { params: { projectId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.projectId;
-    const db = await openDb();
+    const { projectId } = await params;
+    const supabase = getDb();
     
-    // Get the drawings for the specific project
-    const drawings = await db.all(`
-      SELECT * FROM residential_project_drawings
-      WHERE project_id = ?
-      ORDER BY created_at DESC
-    `, [projectId]);
+    const { data: drawings, error } = await supabase
+      .from('residential_project_drawings')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching drawings:', error);
+      return NextResponse.json({ message: 'Failed to fetch drawings' }, { status: 500 });
+    }
 
     return NextResponse.json(drawings);
   } catch (error) {
@@ -32,60 +36,46 @@ export async function GET(
 
 // POST /api/residential/projects/[projectId]/drawings - Add a new drawing to a project
 export async function POST(
-  request: Request,
-  { params }: { params: { projectId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const user = await authenticate(request);
-    if (!user) {
+    const session = getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.projectId;
+    const { projectId } = await params;
     const data = await request.json();
     
-    // Validate required fields
     if (!data.drawing_name) {
       return NextResponse.json({ message: 'Drawing name is required' }, { status: 400 });
     }
 
-    const db = await openDb();
+    const supabase = getDb();
     
-    // Check if the project exists
-    const project = await db.get('SELECT id FROM residential_projects WHERE id = ?', [projectId]);
-    if (!project) {
-      return NextResponse.json({ message: 'Project not found' }, { status: 404 });
+    const { data: newDrawing, error } = await supabase
+      .from('residential_project_drawings')
+      .insert({
+        project_id: projectId,
+        drawing_name: data.drawing_name,
+        drawing_number: data.drawing_number || null,
+        drawing_type: data.drawing_type || null,
+        drawing_date: data.drawing_date || null,
+        drawing_url: data.drawing_url || null,
+        notes: data.notes || null,
+        created_by: session.id,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating drawing:', error);
+      if (error.code === '23503') {
+        return NextResponse.json({ message: 'Project not found' }, { status: 404 });
+      }
+      return NextResponse.json({ message: 'Failed to create drawing' }, { status: 500 });
     }
-    
-    // Insert the new drawing
-    const result = await db.run(`
-      INSERT INTO residential_project_drawings (
-        project_id,
-        drawing_name,
-        drawing_number,
-        drawing_type,
-        drawing_date,
-        drawing_url,
-        notes,
-        created_by,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `, [
-      projectId,
-      data.drawing_name,
-      data.drawing_number || null,
-      data.drawing_type || null,
-      data.drawing_date || null,
-      data.drawing_url || null,
-      data.notes || null,
-      user.id
-    ]);
-    
-    // Get the newly created drawing
-    const newDrawing = await db.get(`
-      SELECT * FROM residential_project_drawings 
-      WHERE id = ?
-    `, result.lastID);
     
     return NextResponse.json(newDrawing, { status: 201 });
   } catch (error) {
