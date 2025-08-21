@@ -39,12 +39,11 @@ export default function ResidentialLogPage() {
   const [searchText, setSearchText] = useState('');
   const [filters, setFilters] = useState<FilterOptions>({});
   
-  // Pagination and sorting states
-  const [currentPage, setCurrentPage] = useState(1);
+  // Sorting state
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [prioritySortCycle, setPrioritySortCycle] = useState(0); // 0: none, 1: Overdue, 2: High, 3: Medium, 4: Low
-  const ITEMS_PER_PAGE = 7; // Limit to 7 projects per page
+  // Removed pagination limit to allow full scrollable list
 
   // Fetch projects when the component mounts and set up auto-refresh
   useEffect(() => {
@@ -119,23 +118,12 @@ export default function ResidentialLogPage() {
     return result;
   }, [projects, searchText, filters, sortField, sortDirection, prioritySortCycle]);
 
-  // Pagination logic
-  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
-  const currentProjects = filteredProjects.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
-
-  // Handle page change
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
+  
 
   // Handle sorting
   const handleSort = (field: SortField, direction: SortDirection) => {
     setSortField(field);
     setSortDirection(direction);
-    setCurrentPage(1);
   };
 
   const handleProjectAdded = () => {
@@ -289,17 +277,16 @@ export default function ResidentialLogPage() {
                       className="block w-full pl-8 sm:pl-10 pr-3 py-1.5 sm:py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:border-gray-500 focus:ring-0 text-sm"
                     />
                   </div>
-                  <ResidentialLogTable 
-                    projects={currentProjects}
-                    onEdit={handleEditProject}
-                    onDelete={handleDeleteProject}
-                    onSort={handleSort}
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={handlePageChange}
-                  />
+                  <div className="max-h-[70vh] overflow-y-auto">
+                    <ResidentialLogTable 
+                      projects={filteredProjects}
+                      onEdit={handleEditProject}
+                      onDelete={handleDeleteProject}
+                      onSort={handleSort}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                    />
+                  </div>
                 </>
               )}
               {activeTab === 'schedule' && <UpcomingSchedule />}

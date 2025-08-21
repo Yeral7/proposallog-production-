@@ -21,6 +21,11 @@ interface Subcontractor {
   name: string;
 }
 
+interface ResidentialStatus {
+  id: number;
+  name: string;
+}
+
 export default function AddResidentialProjectModal({ isOpen, onClose, onProjectAdded }: AddResidentialProjectModalProps) {
   // Form state
   const [projectName, setProjectName] = useState('');
@@ -31,11 +36,12 @@ export default function AddResidentialProjectModal({ isOpen, onClose, onProjectA
   const [estCompletionDate, setEstCompletionDate] = useState('');
   const [contractValue, setContractValue] = useState('');
   const [noContractValue, setNoContractValue] = useState(false);
-  const [status, setStatus] = useState('Pending');
   const [priority, setPriority] = useState('Medium');
+  const [statusId, setStatusId] = useState<number | null>(null);
   
   const [builders, setBuilders] = useState<ResidentialBuilder[]>([]);
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const [statuses, setStatuses] = useState<ResidentialStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +73,25 @@ export default function AddResidentialProjectModal({ isOpen, onClose, onProjectA
         }
       };
       fetchSubcontractors();
+
+      const fetchStatuses = async () => {
+        try {
+          const response = await fetchWithAuth('/api/residential-statuses');
+          if (!response.ok) {
+            throw new Error('Failed to fetch statuses');
+          }
+          const data = await response.json();
+          setStatuses(data);
+          // Set default status to 'Pending' if available
+          const pendingStatus = data.find((s: ResidentialStatus) => s.name === 'Pending');
+          if (pendingStatus) {
+            setStatusId(pendingStatus.id);
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Could not fetch statuses');
+        }
+      };
+      fetchStatuses();
     }
   }, [isOpen]);
 
@@ -80,8 +105,13 @@ export default function AddResidentialProjectModal({ isOpen, onClose, onProjectA
     setEstCompletionDate('');
     setContractValue('');
     setNoContractValue(false);
-    setStatus('Pending');
     setPriority('Medium');
+    setStatusId(null);
+    // Reset to default 'Pending' status if statuses are loaded
+    const pendingStatus = statuses.find(s => s.name === 'Pending');
+    if (pendingStatus) {
+      setStatusId(pendingStatus.id);
+    }
   };
 
   // Reset when modal closes
@@ -111,7 +141,7 @@ export default function AddResidentialProjectModal({ isOpen, onClose, onProjectA
       start_date: startDate || null,
       est_completion_date: estCompletionDate || null,
       contract_value: noContractValue || !contractValue ? null : parseFloat(contractValue),
-      status,
+      status_id: statusId,
       priority
     };
 
@@ -253,14 +283,15 @@ export default function AddResidentialProjectModal({ isOpen, onClose, onProjectA
                 </label>
                 <select
                   id="status"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
+                  value={statusId ?? ''}
+                  onChange={(e) => setStatusId(Number(e.target.value))}
                   className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
                   required
                 >
-                  <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
+                  <option value="" disabled>Select a status</option>
+                  {statuses.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
                 </select>
               </div>
 

@@ -3,9 +3,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/Header';
 import Banner from '../../components/Banner';
-import { HiOutlineClipboardList, HiOutlineCog } from 'react-icons/hi';
+import { HiOutlineClipboardList, HiOutlineCog, HiPlus, HiPencil, HiTrash } from 'react-icons/hi';
 import { fetchWithAuth } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
+import AddOngoingProjectModal from '../../components/dashboard/AddOngoingProjectModal';
+import EditOngoingProjectModal from '../../components/dashboard/EditOngoingProjectModal';
+import { toast } from 'react-toastify';
 
 const ProjectsOngoingPage = () => {
   // State for data refresh mechanism
@@ -17,7 +20,12 @@ const ProjectsOngoingPage = () => {
   const [dataChangeDetected, setDataChangeDetected] = useState(false);
   const [lastDataHash, setLastDataHash] = useState<string>('');
   const [notification, setNotification] = useState<string | null>(null);
-  const { canAccessAdmin } = useAuth(); // Use auth context to check admin status
+  const [ongoingProjects, setOngoingProjects] = useState<any[]>([]);
+  const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [deleteConfirmProject, setDeleteConfirmProject] = useState<any>(null);
+  const { canAccessAdmin, canEditProjects } = useAuth(); // Use auth context to check admin status
 
   // Set up auto-refresh on component mount
   useEffect(() => {
@@ -39,12 +47,12 @@ const ProjectsOngoingPage = () => {
 
   // Simple hash function to detect data changes
   const hashData = (data: any[]): string => {
-    return data.map(item => item.id + '-' + 
-      (item.updated_at || item.completion_date || '')
+    return data.map(item => item.ongoing_id + '-' + 
+      (item.updated_at || '')
     ).join('|');
   };
 
-  // Fetch ongoing projects (placeholder for now)
+  // Fetch ongoing projects
   const fetchOngoingProjects = async (silent: boolean = false) => {
     if (!silent) {
       setIsLoading(true);
@@ -53,13 +61,9 @@ const ProjectsOngoingPage = () => {
     }
     
     try {
-      // This is a placeholder - once the API is ready, uncomment this
-      // const response = await fetchWithAuth('/api/projects/ongoing');
-      // if (!response.ok) throw new Error('Failed to fetch ongoing projects');
-      // const data = await response.json();
-      
-      // Placeholder data - will be replaced with actual API call
-      const data: any[] = [];
+      const response = await fetchWithAuth('/api/projects/ongoing');
+      if (!response.ok) throw new Error('Failed to fetch ongoing projects');
+      const data = await response.json();
       
       // Check if data has changed since last fetch
       const newDataHash = hashData(data);
@@ -73,7 +77,7 @@ const ProjectsOngoingPage = () => {
       }
       
       setLastDataHash(newDataHash);
-      // setProjects(data); // Uncomment when projects state is added
+      setOngoingProjects(data);
       setLastRefreshTime(new Date());
       setError(null);
     } catch (err) {
@@ -86,6 +90,48 @@ const ProjectsOngoingPage = () => {
         setIsLoading(false);
       } 
       setIsRefreshing(false);
+    }
+  };
+
+  // Handle successful project addition
+  const handleProjectAdded = () => {
+    fetchOngoingProjects(false);
+  };
+
+  // Handle edit project
+  const handleEditProject = (project: any) => {
+    setSelectedProject(project);
+    setIsEditModalVisible(true);
+  };
+
+  // Handle successful project update
+  const handleProjectUpdated = () => {
+    fetchOngoingProjects(false);
+    setIsEditModalVisible(false);
+    setSelectedProject(null);
+  };
+
+  // Handle delete project
+  const handleDeleteProject = async (project: any) => {
+    if (!window.confirm(`Are you sure you want to delete the ongoing project "${project.projects?.project_name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetchWithAuth(`/api/projects/ongoing?id=${project.ongoing_id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        toast.success('Ongoing project deleted successfully!');
+        fetchOngoingProjects(false);
+      } else {
+        const errorData = await response.json();
+        toast.error(`Failed to delete project: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast.error('Failed to delete project. Please try again.');
     }
   };
 
@@ -114,20 +160,33 @@ const ProjectsOngoingPage = () => {
               )}
             </div>
             
-            {/* Refresh button */}
-            <button
-              onClick={() => {
-                fetchOngoingProjects();
-                setDataChangeDetected(false);
-              }}
-              disabled={isLoading}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base ${dataChangeDetected ? 'bg-green-50 border-green-300' : 'bg-white border-gray-300'} text-gray-700 rounded-md flex items-center gap-2 shadow-sm hover:bg-gray-50 justify-center ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRefreshing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Refresh
-            </button>
+            <div className="flex gap-3">
+              {/* Add New Project button */}
+              {canEditProjects() && (
+                <button
+                  onClick={() => setIsAddModalVisible(true)}
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-[var(--primary-color)] text-white rounded-md flex items-center gap-2 shadow-sm hover:bg-[var(--secondary-color)] justify-center"
+                >
+                  <HiPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Add New Project
+                </button>
+              )}
+              
+              {/* Refresh button */}
+              <button
+                onClick={() => {
+                  fetchOngoingProjects();
+                  setDataChangeDetected(false);
+                }}
+                disabled={isLoading}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base ${dataChangeDetected ? 'bg-green-50 border-green-300' : 'bg-white border-gray-300'} text-gray-700 rounded-md flex items-center gap-2 shadow-sm hover:bg-gray-50 justify-center ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRefreshing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+            </div>
           </div>
           
           {/* Error message */}
@@ -139,22 +198,119 @@ const ProjectsOngoingPage = () => {
             </div>
           )}
           
-          {/* Content placeholder */}
-          <div className="flex flex-col items-center justify-center min-h-[400px] bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="text-center">
-              <HiOutlineCog className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Projects Ongoing - Under Development
-              </h3>
-              <p className="text-gray-500 max-w-md">
-                This feature is being rebuilt with enhanced functionality. 
-                Check back soon for the new and improved projects ongoing dashboard.
-              </p>
-              <div className="mt-4 text-sm text-gray-400">
-                Beta v 1.02
+          {/* Projects Table */}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center min-h-[400px] bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading ongoing projects...</p>
               </div>
             </div>
-          </div>
+          ) : ongoingProjects.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[400px] bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="text-center">
+                <HiOutlineClipboardList className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No Ongoing Projects
+                </h3>
+                <p className="text-gray-500 max-w-md mb-4">
+                  There are currently no ongoing projects. Add awarded projects from the proposal log to get started.
+                </p>
+                {canEditProjects() && (
+                  <button
+                    onClick={() => setIsAddModalVisible(true)}
+                    className="px-4 py-2 bg-[var(--primary-color)] text-white rounded-md hover:bg-[var(--secondary-color)] flex items-center gap-2 mx-auto"
+                  >
+                    <HiPlus className="w-5 h-5" />
+                    Add First Project
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-800 text-white">
+                    <tr>
+                      {canEditProjects() && (
+                        <th className="py-4 px-4 text-left w-24">Actions</th>
+                      )}
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Project</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Builder</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Contract Value</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Type/Style</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Progress</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Managers</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Timeline</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Address</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {ongoingProjects.map((project) => (
+                      <tr 
+                        key={project.ongoing_id} 
+                        className="hover:bg-gray-50"
+                      >
+                        {canEditProjects() && (
+                          <td className="py-4 px-4">
+                            <button
+                              onClick={() => handleEditProject(project)}
+                              className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
+                              title="Edit project"
+                            >
+                              <HiPencil className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{project.project_name}</div>
+                            <div className="text-sm text-gray-500">{project.status_label}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {project.builder_name}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-base font-medium text-gray-900">
+                          {project.contract_value ? `$${Number(project.contract_value).toLocaleString()}` : 'N/A'}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="text-base font-medium text-gray-900">{project.project_type}</div>
+                          <div className="text-sm text-gray-500">{project.project_style}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900 mb-2">{project.progress_status}</div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                              style={{ width: `${Math.min(project.percent_complete || 0, 100)}%` }}
+                            ></div>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">{project.percent_complete || 0}% complete</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">PM: {project.project_manager_name || 'N/A'}</div>
+                          <div className="text-sm text-gray-500">FM: {project.field_manager_name}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            Start: {project.planned_start_date ? new Date(project.planned_start_date).toLocaleDateString() : 'TBD'}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            End: {project.planned_end_date ? new Date(project.planned_end_date).toLocaleDateString() : 'TBD'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {project.exact_address}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </main>
       
@@ -175,6 +331,25 @@ const ProjectsOngoingPage = () => {
           </button>
         </div>
       )}
+      
+      {/* Add New Project Modal */}
+      <AddOngoingProjectModal
+        isVisible={isAddModalVisible}
+        onClose={() => setIsAddModalVisible(false)}
+        onProjectAdded={handleProjectAdded}
+      />
+
+      {/* Edit Project Modal */}
+      <EditOngoingProjectModal
+        isVisible={isEditModalVisible}
+        onClose={() => {
+          setIsEditModalVisible(false);
+          setSelectedProject(null);
+        }}
+        onProjectUpdated={handleProjectUpdated}
+        onProjectDeleted={() => setNotification('Project deleted successfully')}
+        project={selectedProject}
+      />
     </div>
   );
 };

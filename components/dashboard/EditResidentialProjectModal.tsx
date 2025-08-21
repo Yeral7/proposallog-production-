@@ -15,6 +15,11 @@ interface Subcontractor {
   name: string;
 }
 
+interface ResidentialStatus {
+  id: number;
+  name: string;
+}
+
 
 interface EditResidentialProjectModalProps {
   isOpen: boolean;
@@ -26,6 +31,7 @@ interface EditResidentialProjectModalProps {
 const EditResidentialProjectModal: React.FC<EditResidentialProjectModalProps> = ({ isOpen, onClose, onProjectUpdated, project }) => {
   const [builders, setBuilders] = useState<Builder[]>([]);
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const [residentialStatuses, setResidentialStatuses] = useState<ResidentialStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,13 +46,14 @@ const EditResidentialProjectModal: React.FC<EditResidentialProjectModalProps> = 
   const [noEstCompletionDate, setNoEstCompletionDate] = useState(false);
   const [contractValue, setContractValue] = useState('');
   const [noContractValue, setNoContractValue] = useState(false);
-  const [status, setStatus] = useState('');
+  const [statusId, setStatusId] = useState<number | null>(null);
   const [priority, setPriority] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       fetchBuilders();
       fetchSubcontractors();
+      fetchResidentialStatuses();
     }
   }, [isOpen]);
 
@@ -62,7 +69,7 @@ const EditResidentialProjectModal: React.FC<EditResidentialProjectModalProps> = 
       setNoEstCompletionDate(project.est_completion_date === null);
       setContractValue(project.contract_value ? project.contract_value.toString() : '');
       setNoContractValue(project.contract_value === null);
-      setStatus(project.status || '');
+      setStatusId(project.status?.id || null);
       setPriority(project.priority || '');
     }
   }, [project]);
@@ -77,6 +84,18 @@ const EditResidentialProjectModal: React.FC<EditResidentialProjectModalProps> = 
     } catch (err) {
       console.error(err);
       toast.error('Could not load subcontractors.');
+    }
+  };
+
+  const fetchResidentialStatuses = async () => {
+    try {
+      const response = await fetchWithAuth('/api/residential-statuses');
+      if (!response.ok) throw new Error('Failed to fetch statuses');
+      const data = await response.json();
+      setResidentialStatuses(data);
+    } catch (err) {
+      console.error(err);
+      toast.error('Could not load statuses.');
     }
   };
 
@@ -106,7 +125,7 @@ const EditResidentialProjectModal: React.FC<EditResidentialProjectModalProps> = 
       start_date: noStartDate ? null : startDate,
       est_completion_date: noEstCompletionDate ? null : estCompletionDate,
       contract_value: noContractValue ? null : parseFloat(contractValue),
-      status,
+      status_id: statusId,
       priority,
     };
 
@@ -204,11 +223,9 @@ const EditResidentialProjectModal: React.FC<EditResidentialProjectModalProps> = 
                 </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700">Status</label>
-                    <select value={status} onChange={e => setStatus(e.target.value)} className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2">
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                        <option value="On Hold">On Hold</option>
+                    <select value={statusId ?? ''} onChange={e => setStatusId(Number(e.target.value))} className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2" required>
+                        <option value="">Select Status</option>
+                        {residentialStatuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)} 
                     </select>
                 </div>
                 <div>

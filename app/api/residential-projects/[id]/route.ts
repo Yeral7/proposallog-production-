@@ -42,20 +42,24 @@ export async function PUT(
       .eq('id', projectId)
       .single();
 
+    const updateData: any = {
+      project_name: data.project_name,
+      builder_id: data.builder_id,
+      subcontractor_id: data.subcontractor_id,
+      start_date: data.start_date || null,
+      est_completion_date: data.est_completion_date || null,
+      contract_value: data.contract_value || null,
+      priority: data.priority || 'Medium',
+      updated_at: new Date().toISOString()
+    };
+
+    if (data.status_id) {
+      updateData.status_id = data.status_id;
+    }
+
     const { data: updatedProject, error } = await supabase
       .from('residential_projects')
-      .update({
-        project_name: data.project_name,
-        builder_id: data.builder_id,
-        subcontractor_id: data.subcontractor_id,
-        start_date: data.start_date || null,
-        est_completion_date: data.est_completion_date || null,
-        contract_value: data.contract_value || null,
-        status: data.status || '',
-        priority: data.priority || 'Medium',
-        updated_by: decoded.userId,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', projectId)
       .select()
       .single();

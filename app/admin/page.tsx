@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { HiOutlineShieldCheck, HiSearch, HiChevronLeft, HiChevronRight, HiRefresh } from 'react-icons/hi';
+import { HiOutlineShieldCheck, HiSearch, HiChevronLeft, HiChevronRight, HiRefresh, HiUsers } from 'react-icons/hi';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchWithAuth } from '@/lib/apiClient';
 import { formatAuditTimeToCharlotte } from '@/lib/timezone';
@@ -28,7 +28,10 @@ interface AuditResponse {
   };
 }
 
+type AdminTab = 'audit' | 'users';
+
 const AdminPage = () => {
+  const [activeTab, setActiveTab] = useState<AdminTab>('audit');
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -103,9 +106,45 @@ const AdminPage = () => {
           <Banner title="Admin & Audit" icon={<HiOutlineShieldCheck />} />
           
           <div className="mt-8">
-            <div className="bg-white rounded-lg shadow-md border border-gray-200">
-              {/* Header with search and refresh */}
-              <div className="p-6 border-b border-gray-200">
+            {/* Tab Navigation */}
+            <div className="bg-white rounded-lg shadow-md border border-gray-200 mb-6">
+              <div className="border-b border-gray-200">
+                <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                  <button
+                    onClick={() => setActiveTab('audit')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'audit'
+                        ? 'border-[var(--primary-color)] text-[var(--primary-color)]'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <HiOutlineShieldCheck className="mr-2 h-5 w-5" />
+                      Audit Log
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('users')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'users'
+                        ? 'border-[var(--primary-color)] text-[var(--primary-color)]'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <HiUsers className="mr-2 h-5 w-5" />
+                      User Management
+                    </div>
+                  </button>
+                </nav>
+              </div>
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'audit' && (
+              <div className="bg-white rounded-lg shadow-md border border-gray-200">
+                {/* Header with search and refresh */}
+                <div className="p-6 border-b border-gray-200">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
                     <h2 className="text-xl font-semibold text-gray-800">Audit Log</h2>
@@ -235,7 +274,34 @@ const AdminPage = () => {
                   </div>
                 </div>
               )}
-            </div>
+              </div>
+            )}
+
+            {/* User Management Tab */}
+            {activeTab === 'users' && (
+              <div className="bg-white rounded-lg shadow-md border border-gray-200">
+                <div className="p-6 border-b border-gray-200">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-800">User Management</h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Manage user accounts, roles, and permissions
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="p-6">
+                  <div className="text-center py-12">
+                    <HiUsers className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      User Management Coming Soon
+                    </h3>
+                    <p className="text-gray-500 max-w-md mx-auto">
+                      This feature will allow you to manage user accounts, assign roles, and control permissions across the application.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { HiOutlineCog, HiTrash, HiPlus, HiOutlineOfficeBuilding, HiOutlineLocationMarker, HiOutlineUser, HiSearch, HiUsers } from "react-icons/hi";
+import { HiPlus, HiTrash, HiSearch, HiPencil, HiOutlineCog, HiOutlineOfficeBuilding, HiOutlineUser, HiOutlineLocationMarker, HiOutlineCollection, HiOutlineColorSwatch, HiOutlineChartBar, HiUsers } from 'react-icons/hi';
 import Banner from '../../components/Banner';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import Header from "../../components/Header";
@@ -31,8 +31,28 @@ interface Location {
   name: string;
 }
 
+interface ProjectType {
+  id: number;
+  name: string;
+}
+
+interface ProjectStyle {
+  id: number;
+  name: string;
+}
+
+interface ProgressStatus {
+  id: number;
+  name: string;
+}
+
+interface ResidentialStatus {
+  id: number;
+  name: string;
+}
+
 // Define the type for the active tab
-type ActiveTab = 'builders' | 'estimators' | 'supervisors' | 'locations' | 'subcontractors';
+type ActiveTab = 'builders' | 'estimators' | 'supervisors' | 'locations' | 'project_types' | 'project_styles' | 'progress_statuses' | 'subcontractors' | 'residential_statuses';
 
 const DataManagementPage = () => {
   return (
@@ -48,6 +68,10 @@ const DataManagementPageContent = () => {
   const [estimators, setEstimators] = useState<Estimator[]>([]);
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [projectTypes, setProjectTypes] = useState<ProjectType[]>([]);
+  const [projectStyles, setProjectStyles] = useState<ProjectStyle[]>([]);
+  const [progressStatuses, setProgressStatuses] = useState<ProgressStatus[]>([]);
+  const [residentialStatuses, setResidentialStatuses] = useState<ResidentialStatus[]>([]);
   
   const [activeTab, setActiveTab] = useState<ActiveTab>('builders');
   const [managementType, setManagementType] = useState<'commercial' | 'residential'>('commercial');
@@ -55,30 +79,64 @@ const DataManagementPageContent = () => {
   const [newItemName, setNewItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  const [deleteConfirmItem, setDeleteConfirmItem] = useState<{id: number, type: ActiveTab, name: string} | null>(null);
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<{
+    id: number;
+    type: ActiveTab;
+    name: string;
+  } | null>(null);
+
+  const [editItem, setEditItem] = useState<{
+    id: number;
+    type: ActiveTab;
+    name: string;
+  } | null>(null);
+  const [editName, setEditName] = useState('');
 
   const fetchAllData = useCallback(async () => {
     try {
       // Fetch different builder data based on management type
       const buildersEndpoint = managementType === 'residential' ? '/api/residential-builders' : '/api/builders';
       
-      const [buildersRes, estimatorsRes, supervisorsRes, locationsRes] = await Promise.all([
+      const [buildersRes, estimatorsRes, supervisorsRes, locationsRes, projectTypesRes, projectStylesRes, progressStatusesRes] = await Promise.all([
         fetchWithAuth(buildersEndpoint),
         fetchWithAuth('/api/estimators'),
         fetchWithAuth('/api/supervisors'),
         fetchWithAuth('/api/locations'),
+        fetchWithAuth('/api/project-types'),
+        fetchWithAuth('/api/project-styles'),
+        fetchWithAuth('/api/progress-statuses'),
       ]);
 
       const buildersData = await buildersRes.json();
       const estimatorsData = await estimatorsRes.json();
       const supervisorsData = await supervisorsRes.json();
       const locationsData = await locationsRes.json();
+      const projectTypesData = await projectTypesRes.json();
+      const projectStylesData = await projectStylesRes.json();
+      const progressStatusesData = await progressStatusesRes.json();
 
       // API returns data directly as arrays, not wrapped in objects
       setBuilders(Array.isArray(buildersData) ? buildersData : []);
       setEstimators(Array.isArray(estimatorsData) ? estimatorsData : []);
       setSupervisors(Array.isArray(supervisorsData) ? supervisorsData : []);
       setLocations(Array.isArray(locationsData) ? locationsData : []);
+      setProjectTypes(Array.isArray(projectTypesData) ? projectTypesData : []);
+      setProjectStyles(Array.isArray(projectStylesData) ? projectStylesData : []);
+      setProgressStatuses(Array.isArray(progressStatusesData) ? progressStatusesData : []);
+      
+      // Residential-only: fetch residential statuses
+      if (managementType === 'residential') {
+        try {
+          const resStatusesRes = await fetchWithAuth('/api/residential-statuses');
+          const resStatusesData = await resStatusesRes.json();
+          setResidentialStatuses(Array.isArray(resStatusesData) ? resStatusesData : []);
+        } catch (e) {
+          console.error('Failed to fetch residential statuses:', e);
+          setResidentialStatuses([]);
+        }
+      } else {
+        setResidentialStatuses([]);
+      }
       
       console.log('Fetched data:', {
         builders: buildersData,
@@ -105,6 +163,14 @@ const DataManagementPageContent = () => {
       let endpoint = `/api/${activeTab}/add`;
       if (managementType === 'residential' && activeTab === 'builders') {
         endpoint = '/api/residential-builders/add';
+      } else if (activeTab === 'project_types') {
+        endpoint = '/api/project-types';
+      } else if (activeTab === 'project_styles') {
+        endpoint = '/api/project-styles';
+      } else if (activeTab === 'progress_statuses') {
+        endpoint = '/api/progress-statuses';
+      } else if (managementType === 'residential' && activeTab === 'residential_statuses') {
+        endpoint = '/api/residential-statuses';
       }
       
       const response = await fetchWithAuth(endpoint,
@@ -135,16 +201,83 @@ const DataManagementPageContent = () => {
     setDeleteConfirmItem({ id, type, name });
   };
 
+  const handleEditItem = (id: number, type: ActiveTab, name: string) => {
+    setEditItem({ id, type, name });
+    setEditName(name);
+  };
+
+  const executeEdit = async () => {
+    if (!editItem) return;
+
+    const { id, type } = editItem;
+
+    try {
+      let endpoint = `/api/${type}`;
+      if (managementType === 'residential' && type === 'builders') {
+        endpoint = `/api/residential-builders`;
+      } else if (type === 'project_types') {
+        endpoint = `/api/project-types`;
+      } else if (type === 'project_styles') {
+        endpoint = `/api/project-styles`;
+      } else if (type === 'progress_statuses') {
+        endpoint = `/api/progress-statuses`;
+      } else if (type === 'residential_statuses') {
+        endpoint = `/api/residential-statuses`;
+      }
+      
+      const response = await fetchWithAuth(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: id,
+          name: editName
+        }),
+      });
+
+      if (response.ok) {
+        await fetchAllData();
+        
+        // Log audit action
+        await logClientAuditAction({
+          page: 'Data Management',
+          action: `Updated ${editItem.type.slice(0, -1)}: "${editItem.name}" to "${editName}"`
+        });
+        
+        setEditItem(null);
+        setEditName('');
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to update: ${errorData.message || 'Unknown error'}`);
+        setEditItem(null);
+        setEditName('');
+      }
+    } catch (error) {
+      console.error(`Error updating ${type}:`, error);
+      setEditItem(null);
+      setEditName('');
+    }
+  };
+
   const executeDelete = async () => {
     if (!deleteConfirmItem) return;
 
     const { id, type } = deleteConfirmItem;
 
     try {
-      // Use different endpoints based on management type
+      // Use different endpoints based on management type and new metadata tables
       let endpoint = `/api/${type}/delete?id=${id}`;
       if (managementType === 'residential' && type === 'builders') {
         endpoint = `/api/residential-builders/delete?id=${id}`;
+      } else if (type === 'project_types') {
+        endpoint = `/api/project-types?id=${id}`;
+      } else if (type === 'project_styles') {
+        endpoint = `/api/project-styles?id=${id}`;
+      } else if (type === 'progress_statuses') {
+        endpoint = `/api/progress-statuses?id=${id}`;
+      } else if (type === 'residential_statuses') {
+        endpoint = `/api/residential-statuses?id=${id}`;
       }
       
       const response = await fetchWithAuth(endpoint, {
@@ -176,6 +309,71 @@ const DataManagementPageContent = () => {
     let data: {id: number, name: string}[] = [];
     let placeholder = '';
     let entityName = '';
+    const addItem = async () => {
+      if (!newItemName.trim()) return;
+
+      try {
+        let endpoint = '';
+        let entityName = '';
+        
+        switch (activeTab) {
+          case 'builders':
+            endpoint = managementType === 'residential' ? '/api/residential-builders' : '/api/builders';
+            entityName = 'Builder';
+            break;
+          case 'estimators':
+            endpoint = '/api/estimators';
+            entityName = 'Estimator';
+            break;
+          case 'supervisors':
+            endpoint = '/api/supervisors';
+            entityName = 'Supervisor';
+            break;
+          case 'locations':
+            endpoint = '/api/locations';
+            entityName = 'Location';
+            break;
+          case 'project_types':
+            endpoint = '/api/project-types';
+            entityName = 'Project Type';
+            break;
+          case 'project_styles':
+            endpoint = '/api/project-styles';
+            entityName = 'Project Style';
+            break;
+          case 'progress_statuses':
+            endpoint = '/api/progress-statuses';
+            entityName = 'Progress Status';
+            break;
+          case 'subcontractors':
+            endpoint = '/api/residential-subcontractors';
+            entityName = 'Subcontractor';
+            break;
+        }
+        
+        const response = await fetchWithAuth(endpoint,
+          {
+            method: 'POST',
+            body: JSON.stringify({ name: newItemName }),
+          });
+        if (response.ok) {
+          await fetchAllData();
+          setNewItemName('');
+          
+          // Log audit action
+          await logClientAuditAction({
+            page: 'Data Management',
+            action: `Added new ${activeTab.slice(0, -1)}: "${newItemName}"`
+          });
+        } else {
+          const errorData = await response.json();
+          alert(`Failed to add ${activeTab.slice(0, -1)}: ${errorData.message || 'Unknown error'}`);
+          console.error(`Failed to add ${activeTab}:`, errorData);
+        }
+      } catch (error) {
+        console.error(`Error adding ${activeTab}:`, error);
+      }
+    };
 
     if (activeTab === 'subcontractors') {
       return <SubcontractorsManager />;
@@ -201,6 +399,26 @@ const DataManagementPageContent = () => {
             data = locations;
             placeholder = 'Add new location...';
             entityName = 'Locations';
+            break;
+        case 'project_types':
+            data = projectTypes;
+            placeholder = 'Add new project type...';
+            entityName = 'Project Types';
+            break;
+        case 'project_styles':
+            data = projectStyles;
+            placeholder = 'Add new project style...';
+            entityName = 'Project Styles';
+            break;
+        case 'progress_statuses':
+            data = progressStatuses;
+            placeholder = 'Add new progress status...';
+            entityName = 'Progress Statuses';
+            break;
+        case 'residential_statuses':
+            data = residentialStatuses;
+            placeholder = 'Add new residential status...';
+            entityName = 'Residential Statuses';
             break;
     }
 
@@ -255,13 +473,22 @@ const DataManagementPageContent = () => {
                             <li key={item.id} className="py-3 flex justify-between items-center">
                                 <span className="text-gray-800 font-medium">{item.name}</span>
                                 {canDeleteData() && (
-                                    <button 
-                                        onClick={() => confirmDelete(item.id, activeTab, item.name)} 
-                                        className="text-red-500 hover:text-red-700 transition duration-150 ease-in-out p-1 rounded hover:bg-red-50"
-                                        title={`Delete ${item.name}`}
-                                    >
-                                        <HiTrash className="h-5 w-5" />
-                                    </button>
+                                    <div className="flex space-x-2">
+                                        <button 
+                                            onClick={() => handleEditItem(item.id, activeTab, item.name)} 
+                                            className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
+                                            title={`Edit ${item.name}`}
+                                        >
+                                            <HiPencil className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            onClick={() => confirmDelete(item.id, activeTab, item.name)} 
+                                            className="text-red-500 hover:text-red-700 transition duration-150 ease-in-out p-1 rounded hover:bg-red-50"
+                                            title={`Delete ${item.name}`}
+                                        >
+                                            <HiTrash className="h-5 w-5" />
+                                        </button>
+                                    </div>
                                 )}
                             </li>
                         ))}
@@ -331,11 +558,15 @@ const DataManagementPageContent = () => {
                   <TabButton tabName="estimators" label="Estimators" icon={HiOutlineUser} />
                   <TabButton tabName="supervisors" label="Supervisors" icon={HiOutlineUser} />
                   <TabButton tabName="locations" label="Locations" icon={HiOutlineLocationMarker} />
+                  <TabButton tabName="project_types" label="Project Types" icon={HiOutlineCollection} />
+                  <TabButton tabName="project_styles" label="Project Styles" icon={HiOutlineColorSwatch} />
+                  <TabButton tabName="progress_statuses" label="Progress Statuses" icon={HiOutlineChartBar} />
                 </>
               ) : (
                 <>
                   <TabButton tabName="builders" label="Builders" icon={HiOutlineOfficeBuilding} />
                   <TabButton tabName="subcontractors" label="Subcontractors" icon={HiUsers} />
+                  <TabButton tabName="residential_statuses" label="Residential Statuses" icon={HiOutlineChartBar} />
                 </>
               )}
             </nav>
@@ -360,6 +591,76 @@ const DataManagementPageContent = () => {
           )}
         </div>
       </main>
+
+      {/* Edit Item Modal */}
+      {editItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Edit {editItem.type.slice(0, -1)}
+            </h3>
+            <div className="mb-4">
+              <label htmlFor="editName" className="block text-sm font-medium text-gray-700 mb-2">
+                Name
+              </label>
+              <input
+                type="text"
+                id="editName"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter name"
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setEditItem(null);
+                  setEditName('');
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-[var(--accent-gray)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeEdit}
+                disabled={!editName.trim()}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[var(--primary-color)] hover:bg-[var(--secondary-color)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Confirm Delete
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to delete "{deleteConfirmItem.name}"? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteConfirmItem(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -5,6 +5,8 @@ import { HiX } from 'react-icons/hi';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { fetchWithAuth } from '@/lib/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
+import LostReasonModal from './LostReasonModal';
 
 interface Builder {
   id: number;
@@ -79,6 +81,9 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
   const [error, setError] = useState<string | null>(null);
   const [isMultipleBuilder, setIsMultipleBuilder] = useState(false);
   const [referenceProjectId, setReferenceProjectId] = useState<string>('');
+  const [isLostReasonModalVisible, setIsLostReasonModalVisible] = useState(false);
+  const [lostReason, setLostReason] = useState('');
+  const { user } = useAuth();
 
   // Form state
   const [projectName, setProjectName] = useState('');
@@ -202,27 +207,10 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
     }
   }, [isVisible]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    // Validation
-    if (!projectName || !builderId || !estimatorId || !statusId) {
-      setError('Please ensure Project Name, Builder, Estimator, and Status are selected.');
-      return;
-    }
-    if (!noDueDate && !dueDate) {
-      setError('Please provide a due date or check "No due date".');
-      return;
-    }
-    if (!noContractValue && !contractValue) {
-      setError('Please provide a contract value or check "No contract value".');
-      return;
-    }
-
+  const proceedWithSubmit = async (reason: string | null) => {
     setLoading(true);
 
-    const projectData = {
+    const projectData: any = {
       project_name: projectName,
       builder_id: parseInt(builderId),
       estimator_id: parseInt(estimatorId),
@@ -234,7 +222,12 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
       reference_project_id: isMultipleBuilder && referenceProjectId ? parseInt(referenceProjectId) : null,
       priority_id: priorityId ? parseInt(priorityId) : null,
       submission_date: submissionDate || null,
+      lost_reason: reason,
     };
+
+    if (reason && user) {
+      projectData.user_id = user.id;
+    }
 
     try {
       const response = await fetchWithAuth('/api/projects', {
@@ -255,7 +248,38 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
+      setIsLostReasonModalVisible(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!projectName || !builderId || !estimatorId || !statusId) {
+      setError('Please ensure Project Name, Builder, Estimator, and Status are selected.');
+      return;
+    }
+    if (!noDueDate && !dueDate) {
+      setError('Please provide a due date or check "No due date".');
+      return;
+    }
+    if (!noContractValue && !contractValue) {
+      setError('Please provide a contract value or check "No contract value".');
+      return;
+    }
+
+    const selectedStatus = statuses.find(s => s.id === parseInt(statusId));
+    if (selectedStatus && selectedStatus.label.toLowerCase() === 'lost') {
+      setIsLostReasonModalVisible(true);
+    } else {
+      proceedWithSubmit(null);
+    }
+  };
+
+  const handleLostReasonSubmit = (reason: string) => {
+    setLostReason(reason);
+    proceedWithSubmit(reason);
   };
 
   if (!isVisible) return null;
@@ -580,6 +604,12 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
         </form>
         </div>
       </div>
+      <LostReasonModal
+        isVisible={isLostReasonModalVisible}
+        onClose={() => setIsLostReasonModalVisible(false)}
+        onSubmit={handleLostReasonSubmit}
+        loading={loading}
+      />
     </div>
   );
 }

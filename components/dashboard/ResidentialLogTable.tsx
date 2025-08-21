@@ -11,7 +11,7 @@ export interface ResidentialProject {
   start_date: string | null;
   est_completion_date: string | null;
   contract_value: number | null;
-  status: string;
+  status: { id: number; name: string } | null;
   priority: string;
   created_at: string;
   updated_at: string;
@@ -149,7 +149,7 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
                 <td className="py-4 px-4">
                   {project.contract_value ? `$${Number(project.contract_value).toLocaleString()}` : 'N/A'}
                 </td>
-                <td className="py-4 px-4">{project.status}</td>
+                <td className="py-4 px-4">{project.status?.name || 'N/A'}</td>
               </tr>
             ))}
           </tbody>

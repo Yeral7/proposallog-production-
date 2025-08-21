@@ -42,7 +42,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
   const { canEditProjects, user } = useAuth();
   
   // Main State
-  const [activeTab, setActiveTab] = useState<'contacts' | 'drawings' | 'notes'>('contacts');
+  const [activeTab, setActiveTab] = useState<'contacts' | 'drawings' | 'notes' | 'misc'>('contacts');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -435,21 +435,33 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
   };
 
   // Render Functions
-  const renderTabs = () => (
-    <div className="border-b border-gray-200">
-      <nav className="-mb-px flex space-x-8">
-        {[{ id: 'contacts', label: 'Contacts' }, { id: 'drawings', label: 'Drawings' }, { id: 'notes', label: 'Notes / History' }].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id ? 'border-gray-700 text-gray-800' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
-    </div>
-  );
+  const renderTabs = () => {
+    const tabs = [
+      { id: 'contacts', label: 'Contacts' },
+      { id: 'drawings', label: 'Drawings' },
+      { id: 'notes', label: 'Notes / History' }
+    ];
+
+    if (project.status_name === 'Lost') {
+      tabs.push({ id: 'misc', label: 'Misc' });
+    }
+
+    return (
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id ? 'border-gray-700 text-gray-800' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+    );
+  };
 
   const renderContent = () => {
     if (isLoading) return <div className="text-center p-8">Loading...</div>;
@@ -459,6 +471,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
       case 'contacts': return renderContacts();
       case 'drawings': return renderDrawings();
       case 'notes': return renderNotes();
+      case 'misc': return renderMisc();
       default: return null;
     }
   };
@@ -627,6 +640,17 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
         <div className="text-center py-12 border-2 border-dashed rounded-lg">
           <p className="text-gray-500">No notes yet. Be the first to add one!</p>
         </div>
+      )}
+    </div>
+  );
+
+  const renderMisc = () => (
+    <div className="bg-white shadow-sm border border-gray-200 rounded-lg p-6">
+      <h3 className="font-bold text-gray-800 text-lg mb-4">Lost Reason</h3>
+      {project.lost_reason ? (
+        <p className="text-gray-700 whitespace-pre-wrap">{project.lost_reason}</p>
+      ) : (
+        <p className="text-gray-500">No lost reason was provided for this project.</p>
       )}
     </div>
   );

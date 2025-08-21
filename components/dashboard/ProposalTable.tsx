@@ -14,6 +14,8 @@ export interface Project {
   supervisor_name: string | null;
   status_id: number;
   status_label: string;
+  status_name: string;
+  lost_reason: string | null;
   location_id: number | null;
   location_name: string | null;
   due_date: string | null;
@@ -88,6 +90,13 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
       default:
         return 'text-gray-500';
     }
+  };
+
+  const getStatusColor = (status_label?: string | null): string => {
+    if (status_label && status_label.toLowerCase() === 'awarded') {
+      return 'text-yellow-700 font-semibold';
+    }
+    return 'text-gray-800';
   };
 
   return (
@@ -229,7 +238,7 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
                 <td className={`py-4 px-4 ${getPriorityColor(project.priority_name)}`}>
                   {project.priority_name || 'N/A'}
                 </td>
-                <td className="py-4 px-4">{project.status_label}</td>
+                <td className={`py-4 px-4 ${getStatusColor(project.status_label)}`}>{project.status_label}</td>
                 <td className="py-4 px-4">
                   {project.submission_date && project.submission_date.trim() 
                     ? (() => {

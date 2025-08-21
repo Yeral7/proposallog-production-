@@ -6,6 +6,8 @@ import type { Project } from './ProposalTable';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { fetchWithAuth } from '@/lib/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
+import LostReasonModal from './LostReasonModal';
 
 interface Builder {
   id: number;
@@ -48,6 +50,7 @@ interface EditProjectModalProps {
 
 export default function EditProjectModal({ isVisible, onClose, onProjectUpdated, project }: EditProjectModalProps) {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [showAwardedConfirmation, setShowAwardedConfirmation] = useState(false);
   const [builders, setBuilders] = useState<Builder[]>([]);
   const [estimators, setEstimators] = useState<Estimator[]>([]);
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
@@ -57,6 +60,9 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLostReasonModalVisible, setIsLostReasonModalVisible] = useState(false);
+  const [lostReason, setLostReason] = useState('');
+  const { user } = useAuth();
 
   // Form state
   const [projectName, setProjectName] = useState('');
@@ -284,32 +290,10 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    // Core fields that are always required
-    if (!projectName || !builderId || !estimatorId || !statusId) {
-      setError('Please ensure Project Name, Builder, Estimator, and Status are selected.');
-      return;
-    }
-
-    // Conditional validation for due date
-    if (!noDueDate && !dueDate) {
-      setError('Please provide a due date or check "No due date".');
-      return;
-    }
-
-    // Conditional validation for contract value
-    if (!noContractValue && !contractValue) {
-      setError('Please provide a contract value or check "No contract value".');
-      return;
-    }
-    
+  const proceedWithSubmit = async (reason: string | null) => {
     setLoading(true);
 
-    // Prepare data, handling optional fields correctly by sending null if they are not set
-    const projectData = {
+    const projectData: any = {
       id: project?.id,
       project_name: projectName,
       builder_id: parseInt(builderId),
@@ -322,7 +306,12 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
       priority_id: priorityId ? parseInt(priorityId) : null,
       submission_date: submissionDate || null,
       follow_up_date: followUpDate || null,
+      lost_reason: reason,
     };
+
+    if (reason && user) {
+      projectData.user_id = user.id;
+    }
 
     try {
       const response = await fetchWithAuth(`/api/projects/${project?.id}`, {
@@ -343,7 +332,71 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
+      setIsLostReasonModalVisible(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!projectName || !builderId || !estimatorId || !statusId) {
+      setError('Please ensure Project Name, Builder, Estimator, and Status are selected.');
+      return;
+    }
+    if (!noDueDate && !dueDate) {
+      setError('Please provide a due date or check "No due date".');
+      return;
+    }
+    if (!noContractValue && !contractValue) {
+      setError('Please provide a contract value or check "No contract value".');
+      return;
+    }
+
+    const selectedStatus = statuses.find(s => s.id === parseInt(statusId));
+    if (selectedStatus && selectedStatus.label.toLowerCase() === 'lost') {
+      setIsLostReasonModalVisible(true);
+    } else if (selectedStatus && selectedStatus.label.toLowerCase() === 'awarded') {
+      setShowAwardedConfirmation(true);
+    } else {
+      proceedWithSubmit(null);
+    }
+  };
+
+  const handleLostReasonSubmit = (reason: string) => {
+    setLostReason(reason);
+    proceedWithSubmit(reason);
+  };
+
+  const AwardedConfirmation = () => {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60] px-4">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Confirm Awarded Status</h3>
+          <p className="text-gray-700 mb-6">Are you sure you want to mark this project as Awarded? This will finalize the status.</p>
+          <div className="flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={() => setShowAwardedConfirmation(false)}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-[var(--accent-gray)] focus:outline-none"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowAwardedConfirmation(false);
+                proceedWithSubmit(null);
+              }}
+              disabled={loading}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none"
+            >
+              {loading ? 'Confirming...' : 'Confirm'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const DeleteConfirmation = () => {
@@ -377,9 +430,18 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
 
   if (!isVisible || !project) return null;
 
+  const selectedStatus = statuses.find(s => s.id === parseInt(statusId));
+
   return (
     <>
       {showDeleteConfirmation && <DeleteConfirmation />}
+      {showAwardedConfirmation && <AwardedConfirmation />}
+      <LostReasonModal
+        isVisible={isLostReasonModalVisible}
+        onClose={() => setIsLostReasonModalVisible(false)}
+        onSubmit={handleLostReasonSubmit}
+        loading={loading}
+      />
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
         <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <div className="p-6 overflow-y-auto">

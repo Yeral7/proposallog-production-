@@ -27,13 +27,13 @@ export async function GET(request: Request) {
         start_date,
         est_completion_date,
         contract_value,
-        status,
         priority,
         created_at,
         updated_at,
         subcontractor_id,
-        subcontractor:residential_subcontractors!fk_subcontractor(id, name),
-        builder:residential_builders!fk_builder(id, name)
+        status:residential_statuses!status_id(id, name),
+        subcontractor:residential_subcontractors!subcontractor_id(id, name),
+        builder:residential_builders!builder_id(id, name)
       `)
       .order('created_at', { ascending: false });
     
@@ -78,19 +78,30 @@ export async function POST(request: Request) {
     }
 
     const supabase = getDb();
+    // Get the default 'Pending' status ID
+    const { data: pendingStatus, error: statusError } = await supabase
+      .from('residential_statuses')
+      .select('id')
+      .eq('name', 'Pending')
+      .single();
+
+    if (statusError || !pendingStatus) {
+      console.error('Failed to fetch default status:', statusError);
+      return NextResponse.json({ error: 'Failed to find default project status' }, { status: 500 });
+    }
+
     const { data: newProject, error } = await supabase
       .from('residential_projects')
       .insert({
-        project_name: data.project_name, // Match the actual column name in the database
+        project_name: data.project_name,
         builder_id: data.builder_id,
         subcontractor_id: data.subcontractor_id,
         start_date: data.start_date || null,
         est_completion_date: data.est_completion_date || null,
         contract_value: data.contract_value || null,
-        status: data.status || '',
+        status_id: data.status_id || pendingStatus.id,
         priority: data.priority || 'Medium',
-        created_by: decoded.userId,
-        updated_by: decoded.userId
+        created_by: decoded.userId
       })
       .select()
       .single();

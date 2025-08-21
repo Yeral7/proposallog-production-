@@ -17,9 +17,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const data = await request.json();
     const supabase = getDb();
     
+    const { lost_reason, user_id, ...projectData } = data;
+
     // Correctly validate only the fields that are always required.
-    // Optional fields like due_date, contract_value, supervisor_id, and location_id can be null.
-    if (!data.project_name || !data.builder_id || !data.estimator_id || !data.status_id) {
+    if (!projectData.project_name || !projectData.builder_id || !projectData.estimator_id || !projectData.status_id) {
       return NextResponse.json(
         { error: 'Missing required fields: project_name, builder_id, estimator_id, and status_id are required.' },
         { status: 400 }
@@ -40,25 +41,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       );
     }
 
+    const updateData = { ...projectData };
+    if (lost_reason) {
+      updateData.lost_reason = lost_reason;
+      if (user_id) {
+        updateData.lost_reason_by_user_id = user_id;
+      }
+    }
+
     // Update project
-    const { data: result, error } = await supabase
+    const { error } = await supabase
       .from('projects')
-      .update({
-        project_name: data.project_name,
-        builder_id: data.builder_id,
-        estimator_id: data.estimator_id,
-        supervisor_id: data.supervisor_id,
-        status_id: data.status_id,
-        location_id: data.location_id,
-        due_date: data.due_date,
-        submission_date: data.submission_date,
-        follow_up_date: data.follow_up_date,
-        contract_value: data.contract_value,
-        priority: data.priority
-      })
-      .eq('id', projectId)
-      .select()
-      .single();
+      .update(updateData)
+      .eq('id', projectId);
 
     if (error) {
       console.error('Error updating project:', error);
@@ -67,8 +62,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         { status: 500 }
       );
     }
-
-    // Division associations removed
 
     return NextResponse.json({ 
       success: true, 
