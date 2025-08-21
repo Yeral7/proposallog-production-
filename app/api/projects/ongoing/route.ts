@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import jwt from 'jsonwebtoken';
 
 export async function GET(request: NextRequest) {
   try {
@@ -86,27 +87,25 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const ongoingId = searchParams.get('id');
-    
+    const {
+      ongoing_id: ongoingId,
+      project_type_id: projectTypeId,
+      project_style_id: projectStyleId,
+      planned_start_date: plannedStartDate,
+      planned_end_date: plannedEndDate,
+      exact_address: exactAddress,
+      project_manager_id: projectManagerId,
+      field_manager_id: fieldManagerId,
+      progress_status_id: progressStatusId,
+      percent_complete: percentComplete
+    } = await request.json();
+
     if (!ongoingId) {
       return NextResponse.json(
         { error: 'Ongoing project ID is required' },
         { status: 400 }
       );
     }
-
-    const {
-      projectTypeId,
-      projectStyleId,
-      plannedStartDate,
-      plannedEndDate,
-      exactAddress,
-      projectManagerId,
-      fieldManagerId,
-      progressStatusId,
-      percentComplete
-    } = await request.json();
 
     const supabase = getDb();
     
@@ -155,14 +154,21 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const token = request.headers.get('authorization')?.split(' ')[1];
+    if (!token) {
+      return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
+    if (!decoded) {
+      return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
-    const ongoingId = searchParams.get('id');
-    
-    if (!ongoingId) {
-      return NextResponse.json(
-        { error: 'Ongoing project ID is required' },
-        { status: 400 }
-      );
+    const ongoing_id = searchParams.get('id');
+
+    if (!ongoing_id) {
+      return NextResponse.json({ message: 'Ongoing project ID is required' }, { status: 400 });
     }
 
     const supabase = getDb();
@@ -170,26 +176,21 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase
       .from('projects_ongoing')
       .delete()
-      .eq('ongoing_id', ongoingId);
+      .eq('ongoing_id', parseInt(ongoing_id, 10));
 
     if (error) {
-      console.error('Supabase error:', error);
-      return NextResponse.json(
-        { error: 'Failed to delete ongoing project', details: error.message },
-        { status: 500 }
-      );
+      console.error('Error deleting ongoing project:', error);
+      return NextResponse.json({ message: 'Failed to delete ongoing project', error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Ongoing project deleted successfully'
-    });
+    return NextResponse.json({ message: 'Ongoing project deleted successfully' });
+
   } catch (error) {
-    console.error('Error deleting ongoing project:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete ongoing project' },
-      { status: 500 }
-    );
+    console.error('Server error:', error);
+    if (error instanceof jwt.JsonWebTokenError) {
+      return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
+    }
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }
 

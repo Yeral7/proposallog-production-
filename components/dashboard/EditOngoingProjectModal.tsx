@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { HiX } from 'react-icons/hi';
 import { toast } from 'react-toastify';
 import { fetchWithAuth } from '@/lib/apiClient';
+import ConfirmDeleteModal from '../common/ConfirmDeleteModal';
 
 interface User {
   id: number;
@@ -64,6 +65,7 @@ export default function EditOngoingProjectModal({
   const [progressStatuses, setProgressStatuses] = useState<ProgressStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Form state
   const [projectTypeId, setProjectTypeId] = useState('');
@@ -151,15 +153,15 @@ export default function EditOngoingProjectModal({
         },
         body: JSON.stringify({
           ongoing_id: project.ongoing_id,
-          project_type_id: parseInt(projectTypeId),
-          project_style_id: parseInt(projectStyleId),
-          progress_status_id: parseInt(progressStatusId),
+          project_type_id: projectTypeId ? parseInt(projectTypeId) : null,
+          project_style_id: projectStyleId ? parseInt(projectStyleId) : null,
+          progress_status_id: progressStatusId ? parseInt(progressStatusId) : null,
           planned_start_date: plannedStartDate || null,
           planned_end_date: plannedEndDate || null,
           exact_address: exactAddress,
           project_manager_id: projectManagerId ? parseInt(projectManagerId) : null,
           field_manager_id: fieldManagerId ? parseInt(fieldManagerId) : null,
-          percent_complete: parseInt(percentComplete)
+          percent_complete: percentComplete ? parseInt(percentComplete) : 0
         }),
       });
 
@@ -179,26 +181,32 @@ export default function EditOngoingProjectModal({
   };
 
   const handleDelete = async () => {
-    if (!project || !window.confirm(`Are you sure you want to delete project "${project.ongoing_id}"? This action cannot be undone.`)) return;
+    if (!project) return;
+    setConfirmOpen(true);
+  };
 
+  const confirmDelete = async (ongoingId: number) => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetchWithAuth(`/api/projects/ongoing?id=${project.ongoing_id}`, {
+      const response = await fetchWithAuth(`/api/projects/ongoing?id=${ongoingId}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
+        toast.success('Project deleted successfully');
         if (onProjectDeleted) onProjectDeleted();
         onProjectUpdated();
         onClose();
       } else {
         const errorData = await response.json();
+        toast.error(errorData.message || 'Failed to delete project');
         setError(errorData.message || 'Failed to delete project');
       }
     } catch (error) {
       console.error('Error deleting project:', error);
+      toast.error('An error occurred while deleting the project');
       setError('An error occurred while deleting the project');
     } finally {
       setLoading(false);
@@ -416,7 +424,7 @@ export default function EditOngoingProjectModal({
             <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={async () => await handleDelete()}
                 disabled={loading}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
               >
@@ -442,6 +450,19 @@ export default function EditOngoingProjectModal({
           </form>
         </div>
       </div>
+      <ConfirmDeleteModal
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={async () => {
+          if (project) {
+            await confirmDelete(project.ongoing_id);
+          }
+          setConfirmOpen(false);
+        }}
+        title="Delete project"
+        message={`Are you sure you want to delete project "${project?.ongoing_id}"? This action cannot be undone.`}
+        loading={loading}
+      />
     </div>
   );
 }
