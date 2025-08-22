@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import { fetchWithAuth } from '@/lib/apiClient';
 import { HiPlus, HiOutlineViewGrid, HiSearch, HiFilter, HiDocumentDuplicate } from "react-icons/hi";
 import Banner from "../../components/Banner";
@@ -322,17 +320,6 @@ export default function ProposalLogPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-accent">
-      <ToastContainer 
-        position="top-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
       <Header />
       <div className="relative">
         <Banner title="Proposal Log" icon={<HiOutlineViewGrid className="w-10 h-10" />} />

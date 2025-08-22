@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import bcrypt from 'bcrypt';
 
 export async function POST(request: Request) {
   try {
@@ -48,12 +49,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // In a real app, we would hash the password before storing
-    // const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // For demonstration, we'll store the password as-is (NOT SECURE!)
-    // In production, always use password hashing
-    const hashedPassword = password;
+    // Hash the password before storing
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert the new user
     const { data: newUser, error } = await supabase

@@ -7,7 +7,12 @@ interface UserPayload {
 }
 
 export function getVerifiedSession(request: NextRequest): UserPayload | null {
-  const token = request.headers.get('x-auth-token');
+  // Support both standard Authorization header and legacy x-auth-token
+  const authHeader = request.headers.get('authorization') || '';
+  const bearerToken = authHeader.toLowerCase().startsWith('bearer ')
+    ? authHeader.slice(7)
+    : null;
+  const token = bearerToken || request.headers.get('x-auth-token');
 
   if (!token) {
     return null;

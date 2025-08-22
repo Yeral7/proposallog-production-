@@ -79,6 +79,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    // Best-effort request to clear server-side refresh cookie
+    try {
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      }).catch(() => {});
+    } catch {}
+
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token'); // Remove the token on logout

@@ -14,8 +14,7 @@ import UpcomingSchedule from '../../components/dashboard/UpcomingSchedule';
 import OngoingResidentialProjects from '../../components/dashboard/OngoingResidentialProjects';
 import AddResidentialProjectModal from "../../components/dashboard/AddResidentialProjectModal";
 import { fetchWithAuth } from '../../lib/apiClient';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import ConfirmDeleteModal from '../../components/common/ConfirmDeleteModal';
 
 export default function ResidentialLogPage() {
@@ -172,17 +171,6 @@ export default function ResidentialLogPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <ToastContainer 
-        position="top-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
       <Header />
       <Banner title="Residential" icon={<HiOutlineViewGrid />} />
       <main className="flex-1 p-4 sm:p-6 lg:p-8">

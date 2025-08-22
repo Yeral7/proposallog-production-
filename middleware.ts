@@ -16,7 +16,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // If the request is for the login route, bypass token verification
-  if (request.nextUrl.pathname.startsWith('/api/auth/login')) {
+  if (
+    request.nextUrl.pathname.startsWith('/api/auth/login') ||
+    request.nextUrl.pathname.startsWith('/api/auth/refresh') ||
+    request.nextUrl.pathname.startsWith('/api/auth/logout') ||
+    request.nextUrl.pathname.startsWith('/api/auth/register')
+  ) {
     return NextResponse.next();
   }
 

@@ -62,16 +62,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate JWT
-    const token = jwt.sign(
+    // Generate access token (short-lived) and refresh token (long-lived)
+    const accessToken = jwt.sign(
       { id: user.id, role: user.role || 'viewer' },
       process.env.JWT_SECRET!,
-      { expiresIn: '1d' } // Token expires in 1 day
+      { expiresIn: '1h' } // Access token expires in 1 hour
     );
 
-    return NextResponse.json({
+    const refreshSecret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!;
+    const refreshToken = jwt.sign(
+      { id: user.id, role: user.role || 'viewer' },
+      refreshSecret,
+      { expiresIn: '14d' } // Refresh token expires in 14 days
+    );
+
+    const response = NextResponse.json({
       success: true,
-      token,
+      token: accessToken,
       user: {
         id: user.id,
         name: user.name,
@@ -79,6 +86,17 @@ export async function POST(request: Request) {
         role: user.role || 'viewer',
       },
     });
+
+    // Set HttpOnly refresh token cookie
+    response.cookies.set('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 14, // 14 days
+    });
+
+    return response;
 
   } catch (error) {
     console.error('Login error:', error);

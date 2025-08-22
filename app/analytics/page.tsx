@@ -17,6 +17,7 @@ import Header from '../../components/Header';
 import Banner from '../../components/Banner';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { fetchWithAuth } from '@/lib/apiClient';
+import { formatDateToCharlotte } from '@/lib/timezone';
 import { 
   PieChart, 
   Pie, 
@@ -52,8 +53,10 @@ interface Project {
   location_name: string;
   status_id: number;
   status_label: string;
-  due_date: string;
-  contract_value: number;
+  due_date?: string | null;
+  submission_date?: string | null;
+  follow_up_date?: string | null;
+  contract_value?: number | null;
 }
 
 // Division interface removed
@@ -69,6 +72,7 @@ const AnalyticsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'performance'>('overview');
+  const [timelineField, setTimelineField] = useState<'due_date' | 'submission_date' | 'follow_up_date'>('due_date');
 
   // Fetch data from our backend
   useEffect(() => {
@@ -272,197 +276,6 @@ const AnalyticsPage = () => {
                             ].map((color, index) => (
                               <Cell key={`cell-${index}`} fill={color} />
                             ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-gray-500">
-                        {loading ? (
-                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-500"></div>
-                        ) : (
-                          <p>No contract value data available</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Projects Timeline Chart */}
-                <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-gray-800">Due Date Timeline</h3>
-                    <span className="text-gray-700">
-                      <HiOutlineCalendar className="w-5 h-5" />
-                    </span>
-                  </div>
-                  <div className="h-80">
-                    {projects.length > 0 && projects.some(p => p.due_date) ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={(() => {
-                            // Group projects by month
-                            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                            const projectsByMonth = months.map(month => {
-                              return { 
-                                month,
-                                count: projects.filter(p => {
-                                  if (!p.due_date) return false;
-                                  const date = new Date(p.due_date);
-                                  return months[date.getMonth()] === month;
-                                }).length
-                              };
-                            });
-                            return projectsByMonth;
-                          })()}
-                          margin={{ top: 10, right: 10, left: 10, bottom: 20 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" opacity={0.3} vertical={false} />
-                          <XAxis 
-                            dataKey="month" 
-                            tick={{ fontSize: 11, fill: '#4b5563' }}
-                            tickLine={false}
-                            axisLine={{ strokeOpacity: 0.3 }}
-                          />
-                          <YAxis 
-                            tick={{ fontSize: 11, fill: '#4b5563' }}
-                            tickLine={false}
-                            axisLine={{ strokeOpacity: 0.3 }}
-                          />
-                          <Tooltip 
-                            formatter={(value) => [`${value} projects`, 'Due this month']}
-                            contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '6px', boxShadow: '0 2px 5px rgba(0,0,0,0.15)', border: '1px solid #f0f0f0' }}
-                            cursor={{ stroke: 'rgba(0, 0, 0, 0.15)', strokeWidth: 1 }}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="count" 
-                            stroke="#3182CE" 
-                            strokeWidth={2}
-                            dot={{ fill: '#3182CE', strokeWidth: 2 }}
-                            activeDot={{ r: 6, fill: '#3182CE', stroke: '#fff', strokeWidth: 2 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-gray-500">
-                        {loading ? (
-                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-500"></div>
-                        ) : (
-                          <p>No due date data available</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Project Analytics Tab Content */}
-            {activeTab === 'projects' && (
-              <div className="grid grid-cols-1 gap-6">
-                <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-gray-800">Project Contract Value Analysis</h3>
-                    <span className="bg-gray-100 text-gray-700 p-2 rounded-full">
-                      <HiChartBar className="w-5 h-5" />
-                    </span>
-                  </div>
-                  {projects.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full bg-white table-auto text-sm">
-                        <thead className="bg-gray-100">
-                          <tr>
-                            <th className="py-1 sm:py-2 px-2 sm:px-4 text-left text-xs sm:text-sm">Project</th>
-                            <th className="py-1 sm:py-2 px-2 sm:px-4 text-left text-xs sm:text-sm">Status</th>
-                            <th className="py-1 sm:py-2 px-2 sm:px-4 text-right text-xs sm:text-sm">Contract Value</th>
-                            <th className="py-1 sm:py-2 px-2 sm:px-4 text-left text-xs sm:text-sm">Due Date</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {projects
-                            .filter(project => project.contract_value)
-                            .sort((a, b) => b.contract_value - a.contract_value)
-                            .slice(0, 10)
-                            .map(project => {
-                              const status = statuses.find(s => s.id === project.status_id);
-                              return (
-                                <tr key={project.id}>
-                                  <td className="py-1 sm:py-2 px-2 sm:px-4 text-xs sm:text-base">{project.project_name}</td>
-                                  <td className="py-1 sm:py-2 px-2 sm:px-4 text-xs sm:text-base">{status?.label || 'Unknown'}</td>
-                                  <td className="py-1 sm:py-2 px-2 sm:px-4 text-right text-xs sm:text-base">${project.contract_value?.toLocaleString() || 'N/A'}</td>
-                                  <td className="py-1 sm:py-2 px-2 sm:px-4 text-xs sm:text-base">
-                                    {project.due_date 
-                                      ? new Date(project.due_date).toLocaleDateString() 
-                                      : 'N/A'}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          
-                        </tbody>
-                      </table>
-                      <p className="text-gray-500 text-sm mt-2 text-right">Showing top 10 projects by contract value</p>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">No project data available</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Performance Metrics Tab Content */}
-            {activeTab === 'performance' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Project Value Distribution */}
-                <div className="col-span-1 md:col-span-2 lg:col-span-2 bg-white p-6 rounded-lg shadow-sm">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-gray-800">Contract Value Distribution</h3>
-                    <HiOutlineCash className="h-6 w-6 text-gray-500" />
-                  </div>
-                  <div className="h-80">
-                    {projects.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={projects
-                            .filter(project => project.contract_value)
-                            .sort((a, b) => b.contract_value - a.contract_value)
-                            .slice(0, 10)}
-                          margin={{ top: 20, right: 30, left: 30, bottom: 40 }}
-                          barSize={30}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" opacity={0.3} vertical={false} />
-                          <XAxis 
-                            dataKey="project_name" 
-                            angle={-35} 
-                            textAnchor="end" 
-                            height={80} 
-                            tick={{ fontSize: 11, fill: '#4b5563' }}
-                            tickLine={false}
-                            axisLine={{ strokeOpacity: 0.3 }}
-                            interval={0}
-                          />
-                          <YAxis 
-                            tickFormatter={(value) => `$${(value/1000).toLocaleString()}K`}
-                            tick={{ fontSize: 11, fill: '#4b5563' }}
-                            tickLine={false}
-                            axisLine={{ strokeOpacity: 0.3 }}
-                          />
-                          <Tooltip 
-                            formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Contract Value']}
-                            labelFormatter={(label) => `Project: ${label}`}
-                            contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '6px', boxShadow: '0 2px 5px rgba(0,0,0,0.15)', border: '1px solid #f0f0f0' }}
-                            cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
-                          />
-                          <Bar 
-                            dataKey="contract_value" 
-                            name="Contract Value">
-                            {projects
-                              .filter(project => project.contract_value)
-                              .map((_, index) => {
-                                const colors = ['#334D5C', '#45B7B8', '#EFC958', '#E27A3F', '#DF5A49', '#4A6491', '#93B7BE'];
-                                return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                              })
-                            }
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
