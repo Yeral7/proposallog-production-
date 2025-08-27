@@ -1,3 +1,0 @@
-id,name,email,password_hash
-1,Gerardo,gerardo@example.com,insecure_password_1
-2,John Doe,john.doe@example.com,insecure_password_2

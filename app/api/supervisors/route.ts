@@ -4,7 +4,10 @@ import { getDb } from '../../../lib/db';
 export async function GET() {
   try {
     const supabase = getDb();
-    const { data: supervisors, error } = await supabase.from('supervisors').select('*').order('name');
+    const { data: supervisors, error } = await supabase
+      .from('supervisors')
+      .select('id, name, user_id')
+      .order('name');
     if (error) throw error;
     
     // Make sure we always return an array
