@@ -113,6 +113,67 @@ export default function ResidentialLogPage() {
     }
 
     // Note: Advanced filtering logic removed as it's not applicable to the new data structure.
+    // Apply sorting similar to Proposal Log behavior
+    if (sortField && sortDirection) {
+      result.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+        switch (sortField) {
+          case 'builder':
+            aValue = a.builder?.name ?? null;
+            bValue = b.builder?.name ?? null;
+            break;
+          case 'subcontractor':
+            aValue = a.subcontractor?.name ?? null;
+            bValue = b.subcontractor?.name ?? null;
+            break;
+          case 'status':
+            aValue = a.status?.name ?? null;
+            bValue = b.status?.name ?? null;
+            break;
+          case 'start_date':
+          case 'est_completion_date':
+            aValue = a[sortField];
+            bValue = b[sortField];
+            break;
+          case 'contract_value':
+            aValue = a.contract_value;
+            bValue = b.contract_value;
+            break;
+          case 'project_name':
+          default:
+            aValue = a.project_name;
+            bValue = b.project_name;
+        }
+
+        // Handle nulls/undefined: push to end
+        if (aValue == null) return 1;
+        if (bValue == null) return -1;
+
+        // Dates
+        if (sortField === 'start_date' || sortField === 'est_completion_date') {
+          const dateA = new Date(aValue as string).getTime();
+          const dateB = new Date(bValue as string).getTime();
+          if (isNaN(dateA)) return 1;
+          if (isNaN(dateB)) return -1;
+          return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+        }
+
+        // Strings (case-insensitive)
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          return sortDirection === 'asc'
+            ? aValue.localeCompare(bValue, undefined, { sensitivity: 'base' })
+            : bValue.localeCompare(aValue, undefined, { sensitivity: 'base' });
+        }
+
+        // Numbers
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+
+        return 0;
+      });
+    }
 
     return result;
   }, [projects, searchText, filters, sortField, sortDirection, prioritySortCycle]);

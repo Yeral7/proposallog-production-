@@ -112,7 +112,7 @@ export default function LoginPage() {
           <div className="flex justify-center mb-4">
             <img src="/logos/Viganovatech.png" alt="ViGaNovaTech Logo" className="h-20" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">VigaNovaTech</h1>
+          <h1 className="text-2xl font-bold text-gray-900">ViganovaTech</h1>
           <p className="text-gray-600 mt-2">Pre-Construction Management System</p>
           <p className="text-sm text-gray-500 mt-1">Login to your account</p>
         </div>

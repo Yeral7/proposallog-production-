@@ -78,16 +78,45 @@ export async function POST(request: Request) {
     }
 
     const supabase = getDb();
-    // Get the default 'Pending' status ID
-    const { data: pendingStatus, error: statusError } = await supabase
-      .from('residential_statuses')
-      .select('id')
-      .eq('name', 'Pending')
-      .single();
 
-    if (statusError || !pendingStatus) {
-      console.error('Failed to fetch default status:', statusError);
-      return NextResponse.json({ error: 'Failed to find default project status' }, { status: 500 });
+    // Resolve status_id: prefer provided value; otherwise try 'Pending', then first available status
+    let statusIdToUse: number | null = data.status_id ?? null;
+    if (!statusIdToUse) {
+      const { data: pendingStatus, error: statusError } = await supabase
+        .from('residential_statuses')
+        .select('id')
+        .eq('name', 'Pending')
+        .maybeSingle();
+
+      if (statusError) {
+        console.error('Error querying default status:', statusError);
+        return NextResponse.json({ error: 'Failed to resolve default project status' }, { status: 500 });
+      }
+
+      if (pendingStatus?.id) {
+        statusIdToUse = pendingStatus.id;
+      } else {
+        const { data: firstStatus, error: firstErr } = await supabase
+          .from('residential_statuses')
+          .select('id')
+          .order('display_order', { ascending: true })
+          .order('name', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (firstErr) {
+          console.error('Error fetching fallback status:', firstErr);
+          return NextResponse.json({ error: 'Failed to resolve project status' }, { status: 500 });
+        }
+
+        if (firstStatus?.id) {
+          statusIdToUse = firstStatus.id;
+        }
+      }
+    }
+
+    if (!statusIdToUse) {
+      return NextResponse.json({ error: 'No residential statuses are defined. Please create a status first.' }, { status: 400 });
     }
 
     const { data: newProject, error } = await supabase
@@ -99,7 +128,7 @@ export async function POST(request: Request) {
         start_date: data.start_date || null,
         est_completion_date: data.est_completion_date || null,
         contract_value: data.contract_value || null,
-        status_id: data.status_id || pendingStatus.id,
+        status_id: statusIdToUse,
         priority: data.priority || 'Medium',
         created_by: decoded.userId
       })
