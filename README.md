@@ -1,4 +1,4 @@
-Proposal Log de chi;
+Proposal Log de chil
 
 This is a comprehensive project management dashboard for Cicada Construction Remodeling, built with Next.js and a SQLite backend. It provides tools for managing proposals, residential projects, and administrative data like builders, estimators, and project statuses.
 
