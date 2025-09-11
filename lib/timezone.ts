@@ -1,13 +1,33 @@
 // Timezone utility functions for Charlotte, NC (Eastern Time)
 // Handles both EST and EDT automatically
 
+// Normalize date inputs: if a string lacks timezone info, treat it as UTC.
+function toDateAssumingUTC(dateInput: string | Date | number): Date {
+  if (typeof dateInput === 'string') {
+    const s = dateInput.trim();
+    // Already has timezone info (Z or +/-HH:MM)
+    if (/[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) {
+      const d = new Date(s);
+      return d;
+    }
+    // Convert space separator to T for ISO compliance
+    const base = s.includes('T') ? s : s.replace(' ', 'T');
+    const withZ = base.endsWith('Z') ? base : `${base}Z`;
+    const dIsoZ = new Date(withZ);
+    if (!isNaN(dIsoZ.getTime())) return dIsoZ;
+    // Fallback to native parsing
+    return new Date(s);
+  }
+  return new Date(dateInput);
+}
+
 /**
  * Format a date/timestamp to Charlotte, NC time (Eastern Time)
  * @param dateInput - Date string, Date object, or timestamp
  * @returns Formatted date string in Charlotte ET
  */
 export function formatDateToCharlotte(dateInput: string | Date | number): string {
-  const date = new Date(dateInput);
+  const date = toDateAssumingUTC(dateInput);
   
   // Check if date is valid
   if (isNaN(date.getTime())) {
@@ -28,7 +48,7 @@ export function formatDateToCharlotte(dateInput: string | Date | number): string
  * @returns Formatted datetime string in Charlotte ET
  */
 export function formatDateTimeToCharlotte(dateInput: string | Date | number): string {
-  const date = new Date(dateInput);
+  const date = toDateAssumingUTC(dateInput);
   
   // Check if date is valid
   if (isNaN(date.getTime())) {
@@ -53,7 +73,7 @@ export function formatDateTimeToCharlotte(dateInput: string | Date | number): st
  * @returns Formatted datetime string in Charlotte ET (compact)
  */
 export function formatAuditTimeToCharlotte(dateInput: string | Date | number): string {
-  const date = new Date(dateInput);
+  const date = toDateAssumingUTC(dateInput);
   
   // Check if date is valid
   if (isNaN(date.getTime())) {

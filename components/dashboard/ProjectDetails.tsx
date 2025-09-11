@@ -109,7 +109,8 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           setNotes(data.map((note: any) => ({
             id: note.id.toString(),
             content: note.content, 
-            date: note.timestamp || new Date().toISOString(),
+            // Use API-provided timestamp; backend now falls back to created_at if needed
+            date: note.timestamp,
             author: note.author,
           })));
         } else {
@@ -339,7 +340,8 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
       const newNote: Note = {
         id: newNoteFromApi.id.toString(),
         content: newNoteFromApi.content,
-        date: newNoteFromApi.timestamp || new Date().toISOString(),
+        // Use server-provided timestamp for accuracy
+        date: newNoteFromApi.timestamp,
         author: newNoteFromApi.author,
       };
 

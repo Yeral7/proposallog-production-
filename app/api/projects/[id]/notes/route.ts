@@ -23,9 +23,9 @@ export async function GET(
     // Get all notes for the project, with author's name, ordered by newest first
     const { data: notes, error } = await supabase
       .from('project_notes')
-      .select('id, project_id, content, timestamp, users ( name )')
+      .select('id, project_id, content, timestamp, created_at, users ( name )')
       .eq('project_id', projectId)
-      .order('timestamp', { ascending: false });
+      .order('created_at', { ascending: false });
     
     if (error) {
       console.error('Supabase error:', error);
@@ -49,7 +49,8 @@ export async function GET(
         project_id: note.project_id,
         content: note.content,
         author: authorName,
-        timestamp: note.timestamp
+        // Prefer explicit timestamp; fallback to created_at now that it's present
+        timestamp: note.timestamp || note.created_at
       };
     });
     
@@ -112,9 +113,11 @@ export async function POST(
       .insert({
         project_id: projectId,
         content: data.content,
-        user_id: data.user_id
+        user_id: data.user_id,
+        // Ensure we store creation time since schema has no default for timestamp
+        timestamp: new Date().toISOString()
       })
-      .select('id, project_id, content, user_id, timestamp, users ( name )')
+      .select('id, project_id, content, user_id, timestamp, created_at, users ( name )')
       .single();
 
     if (error) {
@@ -138,7 +141,8 @@ export async function POST(
       project_id: result.project_id,
       content: result.content,
       author: authorName,
-      timestamp: result.timestamp || new Date().toISOString()
+      // Prefer DB-provided timestamp; fallback to created_at
+      timestamp: result.timestamp || result.created_at
     };
     
     return NextResponse.json(

@@ -11,7 +11,7 @@ const Header: React.FC = () => {
   return (
     <header className="bg-[var(--header-gray)] text-white p-4 shadow-sm">
       <div className="max-w-full mx-auto flex items-center justify-between">
-        <h1 className="text-xl font-bold">Casanova</h1>
+        <h1 className="text-xl font-bold">ViganovaTech</h1>
         
         <div className="flex items-center space-x-3">
           {user ? (

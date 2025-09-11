@@ -61,13 +61,18 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
   
   const handleSort = (field: SortField) => {
     let newDirection: SortDirection = 'asc';
-    
+
     if (sortField === field) {
-      if (sortDirection === 'asc') newDirection = 'desc';
-      else if (sortDirection === 'desc') newDirection = null;
-      else newDirection = 'asc';
+      if (field === 'due_date') {
+        // For due_date, toggle only between earliest (asc) and latest (desc)
+        newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        if (sortDirection === 'asc') newDirection = 'desc';
+        else if (sortDirection === 'desc') newDirection = null;
+        else newDirection = 'asc';
+      }
     }
-    
+
     onSort(field, newDirection);
   };
   
