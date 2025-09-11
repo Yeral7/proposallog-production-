@@ -62,6 +62,13 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
   const [currentDrawing, setCurrentDrawing] = useState<Partial<Drawing>>({ title: '', url: '' });
   const [currentNote, setCurrentNote] = useState<Partial<Note>>({ content: '' });
   
+  // Builder contacts (central directory) for reuse
+  type BuilderContact = { id: number; builder_id: number; name: string; title?: string | null; phone?: string | null; email?: string | null };
+  const [useExistingBuilderContact, setUseExistingBuilderContact] = useState(false);
+  const [builderContacts, setBuilderContacts] = useState<BuilderContact[]>([]);
+  const [selectedBuilderContactId, setSelectedBuilderContactId] = useState<string>('');
+  const [isLoadingBuilderContacts, setIsLoadingBuilderContacts] = useState(false);
+  
 
   // State for actions
   const [itemToDelete, setItemToDelete] = useState<{ id: string, type: 'contacts' | 'drawings' | 'notes' } | null>(null);
@@ -159,12 +166,42 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
     setIsEditMode(!!contact);
     setCurrentContact(contact || { name: '', title: '', phone: '', email: '' });
     setShowContactDialog(true);
+    // Reset and prefetch builder contacts when adding a new contact
+    if (!contact && project?.builder_id) {
+      setUseExistingBuilderContact(false);
+      setSelectedBuilderContactId('');
+      setIsLoadingBuilderContacts(true);
+      fetchWithAuth(`/api/builder-contacts?builderId=${project.builder_id}`)
+        .then(async (res) => {
+          if (!res.ok) throw new Error('Failed to fetch builder contacts');
+          const data = await res.json();
+          setBuilderContacts(Array.isArray(data) ? data : []);
+        })
+        .catch((e) => {
+          console.error('Error loading builder contacts:', e);
+          setBuilderContacts([]);
+        })
+        .finally(() => setIsLoadingBuilderContacts(false));
+    }
   };
 
   const handleSaveContact = async () => {
-    if (!currentContact.name) {
-      setError('Contact name is required.');
-      return;
+    // Validation depends on mode
+    if (isEditMode) {
+      if (!currentContact.name) {
+        setError('Contact name is required.');
+        return;
+      }
+    } else if (useExistingBuilderContact) {
+      if (!selectedBuilderContactId) {
+        setError('Please select a builder contact.');
+        return;
+      }
+    } else {
+      if (!currentContact.name) {
+        setError('Contact name is required.');
+        return;
+      }
     }
     setError('');
 
@@ -190,16 +227,30 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           action: `Updated contact: "${currentContact.name}" in project "${project.project_name}"`
         });
       } else {
-        // Create new contact
-        const response = await fetchWithAuth(`/api/projects/${project.id}/contacts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        // Create new contact (either from existing builder contact or manual entry)
+        let payload: any;
+        if (useExistingBuilderContact) {
+          const chosen = builderContacts.find(c => c.id.toString() === selectedBuilderContactId);
+          if (!chosen) throw new Error('Selected contact not found');
+          payload = {
+            name: chosen.name,
+            title: chosen.title || null,
+            email: chosen.email || null,
+            phone: chosen.phone || null,
+          };
+        } else {
+          payload = {
             name: currentContact.name,
             title: currentContact.title,
             email: currentContact.email || null,
             phone: currentContact.phone || null,
-          }),
+          };
+        }
+
+        const response = await fetchWithAuth(`/api/projects/${project.id}/contacts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
         if (!response.ok) {
           const err = await response.json();
@@ -211,7 +262,9 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
         // Log audit action
         await logClientAuditAction({
           page: 'Project Details',
-          action: `Added contact: "${currentContact.name}" to project "${project.project_name}"`
+          action: useExistingBuilderContact
+            ? `Added existing builder contact to project "${project.project_name}": "${updatedContact.name}"`
+            : `Added contact: "${currentContact.name}" to project "${project.project_name}"`
         });
       }
       setShowContactDialog(false);
@@ -675,10 +728,49 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
             <h3 className="text-lg font-bold mb-4">{isEditMode ? 'Edit Contact' : 'Add Contact'}</h3>
             <div className="space-y-4">
-              <input type="text" placeholder="Name" value={currentContact.name || ''} onChange={(e) => setCurrentContact({ ...currentContact, name: e.target.value })} className="border p-2 w-full rounded-md" />
-              <input type="text" placeholder="Title" value={currentContact.title || ''} onChange={(e) => setCurrentContact({ ...currentContact, title: e.target.value })} className="border p-2 w-full rounded-md" />
-              <input type="text" placeholder="Phone" value={currentContact.phone || ''} onChange={(e) => setCurrentContact({ ...currentContact, phone: e.target.value })} className="border p-2 w-full rounded-md" />
-              <input type="email" placeholder="Email" value={currentContact.email || ''} onChange={(e) => setCurrentContact({ ...currentContact, email: e.target.value })} className="border p-2 w-full rounded-md" />
+              {!isEditMode && project?.builder_id && (
+                <div className="flex items-center gap-2">
+                  <input
+                    id="useExistingBuilderContact"
+                    type="checkbox"
+                    checked={useExistingBuilderContact}
+                    onChange={(e) => setUseExistingBuilderContact(e.target.checked)}
+                  />
+                  <label htmlFor="useExistingBuilderContact" className="text-sm text-gray-700">
+                    Select from Builder Contacts
+                  </label>
+                </div>
+              )}
+
+              {!isEditMode && useExistingBuilderContact ? (
+                <div>
+                  <label htmlFor="builderContactSelect" className="block text-sm font-medium text-gray-700 mb-1">Builder Contacts</label>
+                  <select
+                    id="builderContactSelect"
+                    value={selectedBuilderContactId}
+                    onChange={(e) => setSelectedBuilderContactId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
+                    disabled={isLoadingBuilderContacts}
+                  >
+                    <option value="">{isLoadingBuilderContacts ? 'Loading...' : 'Select a contact'}</option>
+                    {builderContacts.map((bc) => (
+                      <option key={bc.id} value={bc.id.toString()}>
+                        {bc.name}{bc.title ? ` — ${bc.title}` : ''}{bc.phone ? ` — ${bc.phone}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {(!isLoadingBuilderContacts && builderContacts.length === 0) && (
+                    <p className="text-sm text-gray-500 mt-1">No contacts found for this builder. Manage them in Data Management → Builders → Manage Contacts.</p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <input type="text" placeholder="Name" value={currentContact.name || ''} onChange={(e) => setCurrentContact({ ...currentContact, name: e.target.value })} className="border p-2 w-full rounded-md" />
+                  <input type="text" placeholder="Title" value={currentContact.title || ''} onChange={(e) => setCurrentContact({ ...currentContact, title: e.target.value })} className="border p-2 w-full rounded-md" />
+                  <input type="text" placeholder="Phone" value={currentContact.phone || ''} onChange={(e) => setCurrentContact({ ...currentContact, phone: e.target.value })} className="border p-2 w-full rounded-md" />
+                  <input type="email" placeholder="Email" value={currentContact.email || ''} onChange={(e) => setCurrentContact({ ...currentContact, email: e.target.value })} className="border p-2 w-full rounded-md" />
+                </>
+              )}
             </div>
             <div className="flex justify-end mt-6 space-x-3">
               <button onClick={() => setShowContactDialog(false)} className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Cancel</button>

@@ -8,7 +8,8 @@ import {
     HiOutlineUsers, 
     HiOutlineCog, 
     HiOutlineChartBar, 
-    HiOutlineHome 
+    HiOutlineHome,
+    HiOutlineUser
 } from 'react-icons/hi';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -17,6 +18,7 @@ const Sidebar = () => {
 
     const navLinks = [
         { title: "Commercial", link: "/commercial", icon: <HiOutlineViewGrid size={22} /> },
+        { title: "User", link: "/user", icon: <HiOutlineUser size={22} />, sub: true },
         { title: "Proposal Log", link: "/proposal-log", icon: <HiOutlineViewGrid size={22} />, sub: true },
         { title: "Projects Ongoing", link: "/projects-ongoing", icon: <HiOutlineClipboardList size={22} />, sub: true },
         { title: "Residential", link: "/residential-log", icon: <HiOutlineHome size={22} /> },
@@ -76,7 +78,7 @@ const Sidebar = () => {
             {/* Version Only */}
             <div className="mt-auto pt-4 border-t border-gray-700">
                 <div className="text-xs text-gray-500 text-center">
-                    Beta v 1.09
+                    Beta v 1.11
                 </div>
             </div>
         </div>

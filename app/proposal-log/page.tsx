@@ -45,10 +45,11 @@ export default function ProposalLogPage() {
   
   // Pagination and sorting states
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState<SortField>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [sortField, setSortField] = useState<SortField>('due_date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [prioritySortCycle, setPrioritySortCycle] = useState(0); // 0: none, 1: Overdue, 2: High, 3: Medium, 4: Low
   const ITEMS_PER_PAGE = 7; // Limit to 7 projects per page
+  const [scrollMode, setScrollMode] = useState(false); // Show more: enable scroll with larger viewport
 
   // Fetch projects when the component mounts and set up auto-refresh
   useEffect(() => {
@@ -216,6 +217,11 @@ export default function ProposalLogPage() {
     const endIndex = startIndex + ITEMS_PER_PAGE;
     return filteredProjects.slice(startIndex, endIndex);
   }, [filteredProjects, currentPage, ITEMS_PER_PAGE]);
+
+  // Display projects: in scroll mode show all filtered projects; otherwise current page only
+  const displayProjects = useMemo(() => {
+    return scrollMode ? filteredProjects : currentProjects;
+  }, [scrollMode, filteredProjects, currentProjects]);
   
   // Calculate total pages
   const totalPages = useMemo(() => {
@@ -428,7 +434,7 @@ export default function ProposalLogPage() {
           ) : (
             <>
               <ProposalTable 
-                projects={currentProjects}
+                projects={displayProjects}
                 onEdit={handleEditProject}
                 onExport={handleExportProject}
                 onSelectProject={handleSelectProject}
@@ -439,6 +445,8 @@ export default function ProposalLogPage() {
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={handlePageChange}
+                onShowMore={() => setScrollMode((v) => !v)}
+                scrollMode={scrollMode}
               />
               
               {detailsProject && (

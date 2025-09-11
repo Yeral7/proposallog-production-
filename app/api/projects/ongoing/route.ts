@@ -70,9 +70,10 @@ export async function GET(request: NextRequest) {
       location_name: project.locations?.name,
       field_manager_name: project.field_manager?.name,
       project_manager_name: project.project_manager?.name,
-      project_type: project.project_types?.name,
-      project_style: project.project_styles?.name,
-      progress_status: project.progress_statuses?.name
+      // Fallback to string columns if FK-based joins are null
+      project_type: project.project_types?.name ?? project.project_type,
+      project_style: project.project_styles?.name ?? project.project_style,
+      progress_status: project.progress_statuses?.name ?? project.progress_status
     })) || [];
 
     return NextResponse.json(flattenedProjects);

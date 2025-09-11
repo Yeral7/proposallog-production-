@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { HiOutlineUser, HiOutlineLogout } from "react-icons/hi";
+import { HiOutlineUser, HiOutlineLogout, HiOutlineBell } from "react-icons/hi";
 import { useAuth } from "../contexts/AuthContext";
 
 const Header: React.FC = () => {
@@ -27,6 +27,15 @@ const Header: React.FC = () => {
                   <span className="text-xs text-gray-300 capitalize">{user.role}</span>
                 </div>
               </div>
+              <button
+                className="p-2 rounded-full hover:bg-gray-700 transition-colors relative"
+                title="Notifications"
+                aria-label="Notifications"
+              >
+                <HiOutlineBell size={20} />
+                {/* Simple unread indicator dot (placeholder) */}
+                <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+              </button>
               <button 
                 onClick={logout}
                 className="p-2 rounded-full hover:bg-gray-700 transition-colors"

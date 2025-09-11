@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { HiPlus, HiTrash, HiSearch, HiPencil, HiOutlineCog, HiOutlineOfficeBuilding, HiOutlineUser, HiOutlineLocationMarker, HiOutlineCollection, HiOutlineColorSwatch, HiOutlineChartBar, HiUsers } from 'react-icons/hi';
 import Banner from '../../components/Banner';
+import ManageBuilderContactsModal from '../../components/dashboard/ManageBuilderContactsModal';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import Header from "../../components/Header";
 import { useAuth } from '../../contexts/AuthContext';
@@ -75,6 +76,9 @@ const DataManagementPageContent = () => {
   
   const [activeTab, setActiveTab] = useState<ActiveTab>('builders');
   const [managementType, setManagementType] = useState<'commercial' | 'residential'>('commercial');
+  const [isManageContactsOpen, setIsManageContactsOpen] = useState(false);
+  const [manageContactsBuilderId, setManageContactsBuilderId] = useState<number | null>(null);
+  const [manageContactsBuilderName, setManageContactsBuilderName] = useState<string | undefined>(undefined);
   
   const [newItemName, setNewItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -468,12 +472,23 @@ const DataManagementPageContent = () => {
             {/* Items list */}
             <div className="space-y-2">
                 {filteredData.length > 0 ? (
-                    <ul className="divide-y divide-gray-200">
+                  <ul className="divide-y divide-gray-200">
                         {filteredData.map((item) => (
                             <li key={item.id} className="py-3 flex justify-between items-center">
                                 <span className="text-gray-800 font-medium">{item.name}</span>
-                                {canDeleteData() && (
-                                    <div className="flex space-x-2">
+                                <div className="flex space-x-2">
+                                    {/* Manage Contacts available for builders tab only */}
+                                    {activeTab === 'builders' && (
+                                      <button
+                                        onClick={() => { setManageContactsBuilderId(item.id); setManageContactsBuilderName(item.name); setIsManageContactsOpen(true); }}
+                                        className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
+                                        title={`Manage Contacts for ${item.name}`}
+                                      >
+                                        <HiUsers className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                    {canDeleteData() && (
+                                      <>
                                         <button 
                                             onClick={() => handleEditItem(item.id, activeTab, item.name)} 
                                             className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
@@ -488,19 +503,20 @@ const DataManagementPageContent = () => {
                                         >
                                             <HiTrash className="h-5 w-5" />
                                         </button>
-                                    </div>
-                                )}
+                                      </>
+                                    )}
+                                </div>
                             </li>
                         ))}
-                    </ul>
+                  </ul>
                 ) : (
-                    <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500">
                         {searchTerm ? (
                             <p>No {entityName.toLowerCase()} found matching "{searchTerm}"</p>
                         ) : (
                             <p>No {entityName.toLowerCase()} available. Add one above to get started.</p>
                         )}
-                    </div>
+                  </div>
                 )}
             </div>
             
@@ -661,6 +677,14 @@ const DataManagementPageContent = () => {
           </div>
         </div>
       )}
+
+      {/* Manage Builder Contacts Modal */}
+      <ManageBuilderContactsModal
+        isVisible={isManageContactsOpen}
+        onClose={() => { setIsManageContactsOpen(false); setManageContactsBuilderId(null); setManageContactsBuilderName(undefined); }}
+        builderId={manageContactsBuilderId}
+        builderName={manageContactsBuilderName}
+      />
     </div>
   );
 };

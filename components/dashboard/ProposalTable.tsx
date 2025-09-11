@@ -42,6 +42,8 @@ interface ProposalTableProps {
   currentPage?: number;
   totalPages?: number;
   onPageChange?: (page: number) => void;
+  onShowMore?: () => void;
+  scrollMode?: boolean;
 }
 
 const ProposalTable: React.FC<ProposalTableProps> = ({ 
@@ -55,7 +57,9 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
   sortDirection = null,
   currentPage = 1,
   totalPages = 1,
-  onPageChange = () => {}
+  onPageChange = () => {},
+  onShowMore = () => {},
+  scrollMode = false
 }) => {
   const { canEditProjects } = useAuth();
   
@@ -106,7 +110,7 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className={`overflow-x-auto ${scrollMode ? 'max-h-[640px] overflow-y-auto' : ''}`}>
         <table className="min-w-full bg-white shadow-md rounded-lg overflow-hidden">
           <thead className="bg-gray-800 text-white">
             <tr>
@@ -270,7 +274,7 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
           </tbody>
         </table>
       </div>
-      {totalPages > 1 && (
+      {!scrollMode && totalPages > 1 && (
         <div className="mt-4 flex justify-between items-center px-2">
           <div className="text-sm text-gray-600">
             Page {currentPage} of {totalPages}
@@ -290,7 +294,36 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
             >
               Next
             </button>
+            <button
+              onClick={onShowMore}
+              className="px-3 py-1 border rounded-md bg-white hover:bg-gray-50 text-gray-700"
+              title={scrollMode ? 'Collapse to default view' : 'Show more and enable scrolling'}
+            >
+              {scrollMode ? 'Collapse' : 'Show more'}
+            </button>
           </div>
+        </div>
+      )}
+      {scrollMode && (
+        <div className="mt-4 flex justify-end px-2">
+          <button
+            onClick={onShowMore}
+            className="px-3 py-1 border rounded-md bg-white hover:bg-gray-50 text-gray-700"
+            title="Collapse to default view"
+          >
+            Collapse
+          </button>
+        </div>
+      )}
+      {totalPages <= 1 && (
+        <div className="mt-4 flex justify-end px-2">
+          <button
+            onClick={onShowMore}
+            className="px-3 py-1 border rounded-md bg-white hover:bg-gray-50 text-gray-700"
+            title={scrollMode ? 'Collapse to default view' : 'Show more and enable scrolling'}
+          >
+            {scrollMode ? 'Collapse' : 'Show more'}
+          </button>
         </div>
       )}
     </div>
