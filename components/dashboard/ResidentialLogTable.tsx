@@ -1,5 +1,5 @@
 import React from 'react';
-import { HiPencil, HiTrash, HiChevronUp, HiChevronDown, HiSelector } from 'react-icons/hi';
+import { HiPencil, HiTrash, HiChevronUp, HiChevronDown, HiSelector, HiChatAlt2 } from 'react-icons/hi';
 
 // Define the type for a single project, including the joined data
 export interface ResidentialProject {
@@ -24,6 +24,8 @@ interface ResidentialLogTableProps {
   projects: ResidentialProject[];
   onEdit: (project: ResidentialProject) => void;
   onDelete: (project: ResidentialProject) => void;
+  onNotes?: (project: ResidentialProject) => void;
+  onSelectProject?: (project: ResidentialProject) => void;
   onSort?: (field: SortField, direction: SortDirection) => void;
   sortField?: SortField;
   sortDirection?: SortDirection;
@@ -36,6 +38,8 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
   projects, 
   onEdit, 
   onDelete,
+  onNotes = () => {},
+  onSelectProject = () => {},
   onSort = () => {},
   sortField = null,
   sortDirection = null,
@@ -44,6 +48,20 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
   onPageChange = () => {}
 }) => {
   
+  const getStatusColor = (statusName?: string | null): string => {
+    switch (statusName) {
+      case 'In Progress':
+        return 'text-green-600 font-semibold';
+      case 'On Hold':
+        return 'text-yellow-600 font-semibold';
+      case 'Upcoming':
+        return 'text-cyan-600 font-semibold';
+      case 'Completed':
+        return 'text-blue-600 font-semibold';
+      default:
+        return 'text-gray-600';
+    }
+  };
   const handleSort = (field: SortField) => {
     let newDirection: SortDirection = 'asc';
     
@@ -120,6 +138,13 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
                 <td className="py-4 px-4">
                   <div className="flex items-center space-x-2">
                     <button 
+                      onClick={() => onNotes(project)}
+                      className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
+                      title="Notes"
+                    >
+                      <HiChatAlt2 className="w-4 h-4" />
+                    </button>
+                    <button 
                       onClick={() => onEdit(project)}
                       className="p-1 bg-gray-200 rounded-md text-gray-600 hover:bg-gray-300"
                       title="Edit Project"
@@ -136,7 +161,13 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
                   </div>
                 </td>
                 <td className="py-4 px-4">
-                  <span className="font-medium text-gray-800">{project.project_name}</span>
+                  <button
+                    onClick={() => onSelectProject(project)}
+                    className="font-medium text-gray-800 hover:text-gray-900 hover:underline text-left"
+                    title="Open notes"
+                  >
+                    {project.project_name}
+                  </button>
                 </td>
                 <td className="py-4 px-4">{project.builder?.name || 'N/A'}</td>
                 <td className="py-4 px-4">{project.subcontractor?.name || 'N/A'}</td>
@@ -149,7 +180,11 @@ const ResidentialLogTable: React.FC<ResidentialLogTableProps> = ({
                 <td className="py-4 px-4">
                   {project.contract_value ? `$${Number(project.contract_value).toLocaleString()}` : 'N/A'}
                 </td>
-                <td className="py-4 px-4">{project.status?.name || 'N/A'}</td>
+                <td className="py-4 px-4">
+                  <span className={getStatusColor(project.status?.name)}>
+                    {project.status?.name || 'N/A'}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>

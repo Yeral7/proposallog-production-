@@ -10,8 +10,9 @@ import ImportProjectModal from "../../components/dashboard/ImportProjectModal";
 
 import FilterProjectsModal, { FilterOptions } from "../../components/dashboard/FilterProjectsModal";
 import EditResidentialProjectModal from "../../components/dashboard/EditResidentialProjectModal";
-import UpcomingSchedule from '../../components/dashboard/UpcomingSchedule';
-import OngoingResidentialProjects from '../../components/dashboard/OngoingResidentialProjects';
+// Removed schedule and ongoing views per request
+import ResidentialNotesPanel from '../../components/dashboard/ResidentialNotesPanel';
+import ResidentialKanbanBoard from '../../components/dashboard/ResidentialKanbanBoard';
 import AddResidentialProjectModal from "../../components/dashboard/AddResidentialProjectModal";
 import { fetchWithAuth } from '../../lib/apiClient';
 import { toast } from 'react-toastify';
@@ -28,30 +29,34 @@ export default function ResidentialLogPage() {
   // Modal states
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('all'); // 'all', 'schedule', 'ongoing'
+  // Tabs: 'all' (table) and 'board' (kanban)
+  const [activeTab, setActiveTab] = useState<'all' | 'board'>('all');
   const [selectedProject, setSelectedProject] = useState<ResidentialProject | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<ResidentialProject | null>(null);
+  const detailsRef = React.useRef<HTMLDivElement>(null);
   
   // Search and filter states
   const [searchText, setSearchText] = useState('');
   const [filters, setFilters] = useState<FilterOptions>({});
   
   // Sorting state
-  const [sortField, setSortField] = useState<SortField>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [sortField, setSortField] = useState<SortField>('status');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [prioritySortCycle, setPrioritySortCycle] = useState(0); // 0: none, 1: Overdue, 2: High, 3: Medium, 4: Low
+  // Custom rotating sort for status: 0=In Progress, 1=On Hold, 2=Upcoming, 3=Completed
+  const [statusSortIndex, setStatusSortIndex] = useState(0);
   // Removed pagination limit to allow full scrollable list
 
   // Fetch projects when the component mounts and set up auto-refresh
   useEffect(() => {
     fetchProjects();
     
-    // Set up auto-refresh interval (every 30 seconds)
+    // Set up auto-refresh interval (every 2 minutes)
     refreshIntervalRef.current = setInterval(() => {
       fetchProjects(true); // silent refresh
-    }, 30000);
+    }, 120000);
     
     // Clean up interval on unmount
     return () => {
@@ -69,25 +74,14 @@ export default function ResidentialLogPage() {
     }
     
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Authentication token not found. Please log in again.');
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await fetch('/api/residential-projects', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
+      const response = await fetchWithAuth('/api/residential-projects', { method: 'GET', cache: 'no-store' });
       if (!response.ok) {
-        throw new Error(`Failed to fetch projects: ${response.statusText}`);
+        let errText = '';
+        try { errText = await response.text(); } catch {}
+        throw new Error(`Failed to fetch projects: ${errText || response.statusText}`);
       }
-      
       const data = await response.json();
-      setProjects(data || []);
+      setProjects(Array.isArray(data) ? data : []);
       setLastRefreshTime(new Date());
       setError(null);
     } catch (err) {
@@ -112,8 +106,30 @@ export default function ResidentialLogPage() {
       result = result.filter(project => project.project_name.toLowerCase().includes(searchLower));
     }
 
-    // Note: Advanced filtering logic removed as it's not applicable to the new data structure.
-    // Apply sorting similar to Proposal Log behavior
+    // If sorting by status, apply rotating order and keep it deterministic
+    if (sortField === 'status') {
+      const baseOrder = ['In Progress', 'On Hold', 'Upcoming', 'Completed'];
+      const baseOrderLower = baseOrder.map(s => s.toLowerCase());
+      const rotatedLower = [
+        ...baseOrderLower.slice(statusSortIndex),
+        ...baseOrderLower.slice(0, statusSortIndex)
+      ];
+
+      result.sort((a, b) => {
+        const aStatus = (a.status?.name ?? '').toString().trim().toLowerCase();
+        const bStatus = (b.status?.name ?? '').toString().trim().toLowerCase();
+        const ai0 = rotatedLower.indexOf(aStatus);
+        const bi0 = rotatedLower.indexOf(bStatus);
+        const aIdx = ai0 === -1 ? Number.MAX_SAFE_INTEGER : ai0;
+        const bIdx = bi0 === -1 ? Number.MAX_SAFE_INTEGER : bi0;
+        if (aIdx !== bIdx) return aIdx - bIdx;
+        // Tie-breaker inside same status: project_name asc for stability
+        return (a.project_name || '').localeCompare(b.project_name || '', undefined, { sensitivity: 'base' });
+      });
+      return result;
+    }
+
+    // Otherwise, perform normal sorting (allow mixing)
     if (sortField && sortDirection) {
       result.sort((a, b) => {
         let aValue: any;
@@ -126,10 +142,6 @@ export default function ResidentialLogPage() {
           case 'subcontractor':
             aValue = a.subcontractor?.name ?? null;
             bValue = b.subcontractor?.name ?? null;
-            break;
-          case 'status':
-            aValue = a.status?.name ?? null;
-            bValue = b.status?.name ?? null;
             break;
           case 'start_date':
           case 'est_completion_date':
@@ -176,12 +188,20 @@ export default function ResidentialLogPage() {
     }
 
     return result;
-  }, [projects, searchText, filters, sortField, sortDirection, prioritySortCycle]);
+  }, [projects, searchText, filters, sortField, sortDirection, prioritySortCycle, statusSortIndex]);
 
   
 
   // Handle sorting
   const handleSort = (field: SortField, direction: SortDirection) => {
+    if (field === 'status') {
+      // Force field to status and rotate the grouping order each click
+      setSortField('status');
+      setSortDirection('asc'); // keep deterministic grouping
+      setStatusSortIndex((prev) => (prev + 1) % 4);
+      return;
+    }
+    // Default behavior for other fields
     setSortField(field);
     setSortDirection(direction);
   };
@@ -278,6 +298,7 @@ export default function ResidentialLogPage() {
 
             </div>
           </div>
+          {/* Tabs: All Projects and Board */}
           <div className="border-b border-gray-200 mb-4">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
               <button
@@ -287,16 +308,10 @@ export default function ResidentialLogPage() {
                 All Projects
               </button>
               <button
-                onClick={() => setActiveTab('schedule')}
-                className={`${activeTab === 'schedule' ? 'border-[var(--primary-color)] text-[var(--primary-color)]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                onClick={() => setActiveTab('board')}
+                className={`${activeTab === 'board' ? 'border-[var(--primary-color)] text-[var(--primary-color)]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
               >
-                Upcoming Schedule
-              </button>
-              <button
-                onClick={() => setActiveTab('ongoing')}
-                className={`${activeTab === 'ongoing' ? 'border-[var(--primary-color)] text-[var(--primary-color)]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-              >
-                Ongoing Projects
+                Board
               </button>
             </nav>
           </div>
@@ -312,7 +327,7 @@ export default function ResidentialLogPage() {
             </div>
           ) : (
             <div>
-              {activeTab === 'all' && (
+              {activeTab === 'all' ? (
                 <>
                   <div className="mb-4 relative">
                     <div className="absolute inset-y-0 left-0 pl-2 sm:pl-3 flex items-center pointer-events-none">
@@ -326,20 +341,42 @@ export default function ResidentialLogPage() {
                       className="block w-full pl-8 sm:pl-10 pr-3 py-1.5 sm:py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:border-gray-500 focus:ring-0 text-sm"
                     />
                   </div>
-                  <div className="max-h-[70vh] overflow-y-auto">
+                  <div className="max-h-[70vh] md:max-h-[70vh] overflow-y-auto">
                     <ResidentialLogTable 
                       projects={filteredProjects}
                       onEdit={handleEditProject}
                       onDelete={handleDeleteProject}
+                      onNotes={(p) => {
+                        setSelectedProject(p);
+                        setTimeout(() => { detailsRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 50);
+                      }}
+                      onSelectProject={(p) => {
+                        setSelectedProject(p);
+                        // scroll to details panel after render
+                        setTimeout(() => { detailsRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 50);
+                      }}
                       onSort={handleSort}
                       sortField={sortField}
                       sortDirection={sortDirection}
                     />
                   </div>
+                  {selectedProject && (
+                    <div ref={detailsRef} className="mt-6 sm:mt-8 bg-white rounded-lg shadow-md p-3 sm:p-6">
+                      <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                        Project Notes: {selectedProject.project_name}
+                      </h2>
+                      <ResidentialNotesPanel projectId={selectedProject.id} />
+                    </div>
+                  )}
                 </>
+              ) : (
+                <div className="mt-2">
+                  <ResidentialKanbanBoard 
+                    projects={projects}
+                    onStatusChanged={() => fetchProjects(true)}
+                  />
+                </div>
               )}
-              {activeTab === 'schedule' && <UpcomingSchedule />}
-              {activeTab === 'ongoing' && <OngoingResidentialProjects />}
             </div>
           )}
         </div>
@@ -375,6 +412,7 @@ export default function ResidentialLogPage() {
         onProjectUpdated={handleProjectUpdated}
         project={selectedProject}
       />
+
     </div>
   );
 }

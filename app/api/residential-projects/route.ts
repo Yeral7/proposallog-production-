@@ -12,9 +12,10 @@ export async function GET(request: Request) {
     }
 
     const token = authHeader.substring(7);
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    
-    if (!decoded) {
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    } catch (e) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -62,9 +63,10 @@ export async function POST(request: Request) {
     }
 
     const token = authHeader.substring(7);
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    
-    if (!decoded) {
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    } catch (e) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
