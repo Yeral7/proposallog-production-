@@ -96,13 +96,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Failed to add note' }, { status: 500 });
     }
 
+    const u: any = (data as any).users;
+    const author_name = Array.isArray(u) ? (u[0]?.name ?? null) : (u?.name ?? null);
     const note = {
       id: data.id,
       project_id: data.project_id,
       content: data.content,
       timestamp: data.timestamp,
       user_id: data.user_id,
-      author_name: Array.isArray(data.users) ? (data.users[0]?.name ?? null) : (data.users?.name ?? null),
+      author_name,
     };
     return NextResponse.json(note, { status: 201 });
   } catch (e) {
