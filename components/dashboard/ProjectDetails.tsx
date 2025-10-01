@@ -62,18 +62,14 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
   const [currentDrawing, setCurrentDrawing] = useState<Partial<Drawing>>({ title: '', url: '' });
   const [currentNote, setCurrentNote] = useState<Partial<Note>>({ content: '' });
   
-  // Builder contacts (central directory) for reuse
-  type BuilderContact = { id: number; builder_id: number; name: string; title?: string | null; phone?: string | null; email?: string | null };
-  const [useExistingBuilderContact, setUseExistingBuilderContact] = useState(false);
-  const [builderContacts, setBuilderContacts] = useState<BuilderContact[]>([]);
-  const [selectedBuilderContactId, setSelectedBuilderContactId] = useState<string>('');
-  const [isLoadingBuilderContacts, setIsLoadingBuilderContacts] = useState(false);
-  
 
   // State for actions
   const [itemToDelete, setItemToDelete] = useState<{ id: string, type: 'contacts' | 'drawings' | 'notes' } | null>(null);
   const [phoneToCall, setPhoneToCall] = useState('');
   const [copiedTooltip, setCopiedTooltip] = useState<string | null>(null);
+  const [additionalPhones, setAdditionalPhones] = useState<{ type: string; number: string }[]>([]);
+  const PHONE_TYPES = ["Mobile", "Office", "Home", "Fax", "Other"];
+  const [contactsSource, setContactsSource] = useState<'builder' | 'project' | 'none'>('none');
 
   // Data Persistence Effect
   useEffect(() => {
@@ -86,24 +82,54 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
     setNotes([]);
     setError('');
 
-    // Fetch contacts from API
+    // Fetch contacts with fallback: builder contacts first, then per-project contacts
     const fetchContacts = async () => {
       try {
-        const response = await fetchWithAuth(`/api/projects/${project.id}/contacts`);
-        if (response.ok) {
-          const data = await response.json();
-          setContacts(data.map(contact => ({
-            id: contact.id.toString(),
-            name: contact.name,
-            title: contact.title,
-            phone: contact.phone,
-            email: contact.email
-          })));
+        let loaded = false;
+        // Try builder contacts when builder_id exists
+        if (project.builder_id) {
+          const response = await fetchWithAuth(`/api/builder-contacts?builderId=${project.builder_id}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+              setContacts(data.map((contact: any) => ({
+                id: contact.id.toString(),
+                name: contact.name,
+                title: contact.title,
+                phone: contact.phone,
+                email: contact.email
+              })));
+              setContactsSource('builder');
+              loaded = true;
+            }
+          } else {
+            console.error('Failed to fetch builder contacts');
+          }
         } else {
-          console.error('Failed to fetch contacts');
+          console.warn('Project has no builder_id');
+        }
+
+        // Fallback to old per-project contacts
+        if (!loaded) {
+          const projRes = await fetchWithAuth(`/api/projects/${project.id}/contacts`);
+          if (projRes.ok) {
+            const pdata = await projRes.json();
+            setContacts((Array.isArray(pdata) ? pdata : []).map((contact: any) => ({
+              id: contact.id.toString(),
+              name: contact.name,
+              title: contact.title,
+              phone: contact.phone,
+              email: contact.email,
+            })));
+            setContactsSource('project');
+          } else {
+            console.error('Failed to fetch project contacts');
+            setContactsSource('none');
+          }
         }
       } catch (err) {
         console.error('Error fetching contacts:', err);
+        setContactsSource('none');
       }
     };
 
@@ -164,56 +190,83 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
 
   const handleOpenContactDialog = (contact?: Contact) => {
     setIsEditMode(!!contact);
-    setCurrentContact(contact || { name: '', title: '', phone: '', email: '' });
-    setShowContactDialog(true);
-    // Reset and prefetch builder contacts when adding a new contact
-    if (!contact && project?.builder_id) {
-      setUseExistingBuilderContact(false);
-      setSelectedBuilderContactId('');
-      setIsLoadingBuilderContacts(true);
-      fetchWithAuth(`/api/builder-contacts?builderId=${project.builder_id}`)
-        .then(async (res) => {
-          if (!res.ok) throw new Error('Failed to fetch builder contacts');
-          const data = await res.json();
-          setBuilderContacts(Array.isArray(data) ? data : []);
-        })
-        .catch((e) => {
-          console.error('Error loading builder contacts:', e);
-          setBuilderContacts([]);
-        })
-        .finally(() => setIsLoadingBuilderContacts(false));
+    // Parse existing phone into primary and extras using delimiter " || " and optional "Type:Number" format
+    const phoneStr = contact?.phone || '';
+    const parts = phoneStr.split(' || ').map(p => p.trim()).filter(Boolean);
+    let primary = '';
+    const extras: { type: string; number: string }[] = [];
+    if (parts.length > 0) {
+      const first = parts[0];
+      if (first.includes(':')) {
+        const split = first.split(':', 2);
+        primary = (split[1] || '').trim();
+      } else {
+        primary = first;
+      }
+      for (let i = 1; i < parts.length; i++) {
+        const token = parts[i];
+        if (token.includes(':')) {
+          const [t, n] = token.split(':', 2);
+          extras.push({ type: (t || 'Other').trim(), number: (n || '').trim() });
+        } else if (token) {
+          extras.push({ type: 'Other', number: token });
+        }
+      }
     }
+    setCurrentContact(contact ? { ...contact, phone: primary } : { name: '', title: '', phone: '', email: '' });
+    setAdditionalPhones(extras);
+    setShowContactDialog(true);
   };
 
   const handleSaveContact = async () => {
-    // Validation depends on mode
-    if (isEditMode) {
-      if (!currentContact.name) {
-        setError('Contact name is required.');
-        return;
-      }
-    } else if (useExistingBuilderContact) {
-      if (!selectedBuilderContactId) {
-        setError('Please select a builder contact.');
-        return;
-      }
-    } else {
-      if (!currentContact.name) {
-        setError('Contact name is required.');
-        return;
-      }
+    // Validation
+    if (!currentContact.name) {
+      setError('Contact name is required.');
+      return;
     }
     setError('');
 
     try {
       let updatedContact;
+      // Combine primary and additional phones into a single string for the existing phone field
+      const combinedParts: string[] = [];
+      if (currentContact.phone && currentContact.phone.trim()) {
+        combinedParts.push(currentContact.phone.trim());
+      }
+      additionalPhones.forEach(p => {
+        if (p.number && p.number.trim()) {
+          combinedParts.push(`${p.type}:${p.number.trim()}`);
+        }
+      });
+      const combinedPhone = combinedParts.join(' || ');
       if (isEditMode && currentContact.id) {
-        // Update existing contact
-        const response = await fetchWithAuth(`/api/projects/${project.id}/contacts/${currentContact.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(currentContact),
-        });
+        // Update existing contact based on source
+        let response: Response;
+        if (contactsSource === 'builder') {
+          response = await fetchWithAuth(`/api/builder-contacts`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: parseInt(currentContact.id),
+              name: currentContact.name,
+              title: currentContact.title,
+              email: currentContact.email || null,
+              phone: combinedPhone || null,
+            }),
+          });
+        } else {
+          response = await fetchWithAuth(`/api/projects/${project.id}/contacts`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: parseInt(currentContact.id),
+              name: currentContact.name,
+              title: currentContact.title,
+              email: currentContact.email || null,
+              phone: combinedPhone || null,
+            }),
+          });
+        }
         if (!response.ok) {
           const err = await response.json();
           throw new Error(err.error || 'Failed to update contact');
@@ -227,31 +280,34 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           action: `Updated contact: "${currentContact.name}" in project "${project.project_name}"`
         });
       } else {
-        // Create new contact (either from existing builder contact or manual entry)
-        let payload: any;
-        if (useExistingBuilderContact) {
-          const chosen = builderContacts.find(c => c.id.toString() === selectedBuilderContactId);
-          if (!chosen) throw new Error('Selected contact not found');
-          payload = {
-            name: chosen.name,
-            title: chosen.title || null,
-            email: chosen.email || null,
-            phone: chosen.phone || null,
-          };
-        } else {
-          payload = {
+        // Create new contact — prefer current source; if none, use builder when available
+        const targetForCreate = contactsSource !== 'none' ? contactsSource : (project.builder_id ? 'builder' : 'project');
+        let response: Response;
+        if (targetForCreate === 'builder') {
+          const payload = {
+            builder_id: project.builder_id,
             name: currentContact.name,
             title: currentContact.title,
             email: currentContact.email || null,
-            phone: currentContact.phone || null,
+            phone: combinedPhone || null,
           };
+          response = await fetchWithAuth(`/api/builder-contacts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        } else {
+          response = await fetchWithAuth(`/api/projects/${project.id}/contacts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: currentContact.name,
+              title: currentContact.title,
+              email: currentContact.email || null,
+              phone: combinedPhone || null,
+            }),
+          });
         }
-
-        const response = await fetchWithAuth(`/api/projects/${project.id}/contacts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
         if (!response.ok) {
           const err = await response.json();
           throw new Error(err.error || 'Failed to create contact');
@@ -262,9 +318,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
         // Log audit action
         await logClientAuditAction({
           page: 'Project Details',
-          action: useExistingBuilderContact
-            ? `Added existing builder contact to project "${project.project_name}": "${updatedContact.name}"`
-            : `Added contact: "${currentContact.name}" to project "${project.project_name}"`
+          action: `Added contact: "${currentContact.name}" to project "${project.project_name}"`
         });
       }
       setShowContactDialog(false);
@@ -432,13 +486,24 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
     if (!itemToDelete) return;
 
     const { id, type } = itemToDelete;
-    const url = `/api/projects/${project.id}/${type}`;
 
     try {
-      const response = await fetchWithAuth(url, {
-        method: 'DELETE',
-        body: JSON.stringify({ id }),
-      });
+      let response: Response;
+      if (type === 'contacts') {
+        if (contactsSource === 'builder') {
+          response = await fetchWithAuth(`/api/builder-contacts?id=${id}`, { method: 'DELETE' });
+        } else {
+          response = await fetchWithAuth(`/api/projects/${project.id}/contacts`, {
+            method: 'DELETE',
+            body: JSON.stringify({ id }),
+          });
+        }
+      } else {
+        response = await fetchWithAuth(`/api/projects/${project.id}/${type}`, {
+          method: 'DELETE',
+          body: JSON.stringify({ id }),
+        });
+      }
 
       if (response.ok) {
         let itemName = '';
@@ -563,13 +628,23 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
               <p className="text-sm text-gray-600 mb-4">{contact.title}</p>
               
               {contact.phone && (
-                <div className="flex items-center space-x-2 text-sm text-gray-700 group mb-1">
-                  <HiPhone size={16} className="text-gray-400 flex-shrink-0"/>
-                  <a href={`tel:${contact.phone}`} className="hover:underline">{contact.phone}</a>
-                  <button onClick={() => handleCopyToClipboard(contact.phone!, 'phone')} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-400 hover:text-gray-700">
-                    <HiClipboard size={16} />
-                  </button>
-                </div>
+                contact.phone.split(' || ').map((token, idx) => {
+                  const parts = token.split(':');
+                  const hasType = parts.length > 1;
+                  const type = hasType ? parts[0].trim() : '';
+                  const number = hasType ? parts.slice(1).join(':').trim() : token.trim();
+                  if (!number) return null;
+                  return (
+                    <div key={idx} className="flex items-center space-x-2 text-sm text-gray-700 group mb-1">
+                      <HiPhone size={16} className="text-gray-400 flex-shrink-0"/>
+                      {hasType && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{type}</span>}
+                      <a href={`tel:${number}`} className="hover:underline">{number}</a>
+                      <button onClick={() => handleCopyToClipboard(number, 'phone')} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-400 hover:text-gray-700">
+                        <HiClipboard size={16} />
+                      </button>
+                    </div>
+                  );
+                })
               )}
               
               {contact.email && (
@@ -728,50 +803,63 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
             <h3 className="text-lg font-bold mb-4">{isEditMode ? 'Edit Contact' : 'Add Contact'}</h3>
             <div className="space-y-4">
-              {!isEditMode && project?.builder_id && (
-                <div className="flex items-center gap-2">
-                  <input
-                    id="useExistingBuilderContact"
-                    type="checkbox"
-                    checked={useExistingBuilderContact}
-                    onChange={(e) => setUseExistingBuilderContact(e.target.checked)}
-                  />
-                  <label htmlFor="useExistingBuilderContact" className="text-sm text-gray-700">
-                    Select from Builder Contacts
-                  </label>
-                </div>
-              )}
+              <input type="text" placeholder="Name" value={currentContact.name || ''} onChange={(e) => setCurrentContact({ ...currentContact, name: e.target.value })} className="border p-2 w-full rounded-md" required />
+              <input type="text" placeholder="Title" value={currentContact.title || ''} onChange={(e) => setCurrentContact({ ...currentContact, title: e.target.value })} className="border p-2 w-full rounded-md" />
+              <input type="text" placeholder="Phone" value={currentContact.phone || ''} onChange={(e) => setCurrentContact({ ...currentContact, phone: e.target.value })} className="border p-2 w-full rounded-md" />
+              <input type="email" placeholder="Email" value={currentContact.email || ''} onChange={(e) => setCurrentContact({ ...currentContact, email: e.target.value })} className="border p-2 w-full rounded-md" />
 
-              {!isEditMode && useExistingBuilderContact ? (
-                <div>
-                  <label htmlFor="builderContactSelect" className="block text-sm font-medium text-gray-700 mb-1">Builder Contacts</label>
-                  <select
-                    id="builderContactSelect"
-                    value={selectedBuilderContactId}
-                    onChange={(e) => setSelectedBuilderContactId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
-                    disabled={isLoadingBuilderContacts}
+              {/* Additional Phone Numbers (stored in same phone field) */}
+              <div className="border-t pt-3 mt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700">Additional Phone Numbers</label>
+                  <button
+                    type="button"
+                    onClick={() => setAdditionalPhones([...additionalPhones, { type: 'Mobile', number: '' }])}
+                    className="text-sm px-3 py-1 bg-[var(--header-gray)] text-white rounded-md hover:bg-gray-800"
                   >
-                    <option value="">{isLoadingBuilderContacts ? 'Loading...' : 'Select a contact'}</option>
-                    {builderContacts.map((bc) => (
-                      <option key={bc.id} value={bc.id.toString()}>
-                        {bc.name}{bc.title ? ` — ${bc.title}` : ''}{bc.phone ? ` — ${bc.phone}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {(!isLoadingBuilderContacts && builderContacts.length === 0) && (
-                    <p className="text-sm text-gray-500 mt-1">No contacts found for this builder. Manage them in Data Management → Builders → Manage Contacts.</p>
-                  )}
+                    + Add Phone
+                  </button>
                 </div>
-              ) : (
-                <>
-                  <input type="text" placeholder="Name" value={currentContact.name || ''} onChange={(e) => setCurrentContact({ ...currentContact, name: e.target.value })} className="border p-2 w-full rounded-md" />
-                  <input type="text" placeholder="Title" value={currentContact.title || ''} onChange={(e) => setCurrentContact({ ...currentContact, title: e.target.value })} className="border p-2 w-full rounded-md" />
-                  <input type="text" placeholder="Phone" value={currentContact.phone || ''} onChange={(e) => setCurrentContact({ ...currentContact, phone: e.target.value })} className="border p-2 w-full rounded-md" />
-                  <input type="email" placeholder="Email" value={currentContact.email || ''} onChange={(e) => setCurrentContact({ ...currentContact, email: e.target.value })} className="border p-2 w-full rounded-md" />
-                </>
-              )}
+                {additionalPhones.map((phone, index) => (
+                  <div key={index} className="flex gap-2 mb-2">
+                    <select
+                      value={phone.type}
+                      onChange={(e) => {
+                        const updated = [...additionalPhones];
+                        updated[index].type = e.target.value;
+                        setAdditionalPhones(updated);
+                      }}
+                      className="border p-2 rounded-md"
+                    >
+                      {PHONE_TYPES.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="tel"
+                      placeholder="Phone number"
+                      value={phone.number}
+                      onChange={(e) => {
+                        const updated = [...additionalPhones];
+                        updated[index].number = e.target.value;
+                        setAdditionalPhones(updated);
+                      }}
+                      className="border p-2 flex-1 rounded-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAdditionalPhones(additionalPhones.filter((_, i) => i !== index))}
+                      className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              <p className="text-sm text-gray-600 italic">Note: This contact will be saved to the builder's contact list.</p>
             </div>
+            {error && <div className="mt-3 p-3 bg-red-50 text-red-700 rounded-md text-sm">{error}</div>}
             <div className="flex justify-end mt-6 space-x-3">
               <button onClick={() => setShowContactDialog(false)} className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Cancel</button>
               <button onClick={handleSaveContact} className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800">Save</button>
@@ -809,10 +897,10 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
                 onChange={(e) => setCurrentNote({ ...currentNote, content: e.target.value })}
                 className="border p-3 w-full rounded-md focus:ring-2 focus:ring-gray-500 focus:outline-none transition-shadow duration-200"
                 rows={8}
-                maxLength={1000}
+                maxLength={3000}
               ></textarea>
               <div className="text-right text-sm text-gray-500 mt-1">
-                {currentNote.content?.length || 0} / 1000
+                {currentNote.content?.length || 0} / 3000
               </div>
             </div>
             <div className="flex justify-end mt-6 space-x-3">

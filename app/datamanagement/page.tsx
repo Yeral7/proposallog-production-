@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { HiPlus, HiTrash, HiSearch, HiPencil, HiOutlineCog, HiOutlineOfficeBuilding, HiOutlineUser, HiOutlineLocationMarker, HiOutlineCollection, HiOutlineColorSwatch, HiOutlineChartBar, HiUsers } from 'react-icons/hi';
+import { toast } from 'react-toastify';
 import Banner from '../../components/Banner';
 import ManageBuilderContactsModal from '../../components/dashboard/ManageBuilderContactsModal';
 import ProtectedRoute from '../../components/ProtectedRoute';
@@ -185,6 +186,7 @@ const DataManagementPageContent = () => {
       if (response.ok) {
         await fetchAllData();
         setNewItemName('');
+        toast.success(`${activeTab.slice(0, -1)} "${newItemName}" added successfully!`);
         
         // Log audit action
         await logClientAuditAction({
@@ -193,10 +195,11 @@ const DataManagementPageContent = () => {
         });
       } else {
         const errorData = await response.json();
-        alert(`Failed to add ${activeTab.slice(0, -1)}: ${errorData.message || 'Unknown error'}`);
+        toast.error(`Failed to add ${activeTab.slice(0, -1)}: ${errorData.message || 'Unknown error'}`);
         console.error(`Failed to add ${activeTab}:`, errorData);
       }
     } catch (error) {
+      toast.error(`Error adding ${activeTab.slice(0, -1)}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       console.error(`Error adding ${activeTab}:`, error);
     }
   };
@@ -242,6 +245,7 @@ const DataManagementPageContent = () => {
 
       if (response.ok) {
         await fetchAllData();
+        toast.success(`${editItem.type.slice(0, -1)} updated successfully!`);
         
         // Log audit action
         await logClientAuditAction({
@@ -253,11 +257,12 @@ const DataManagementPageContent = () => {
         setEditName('');
       } else {
         const errorData = await response.json();
-        alert(`Failed to update: ${errorData.message || 'Unknown error'}`);
+        toast.error(`Failed to update: ${errorData.message || 'Unknown error'}`);
         setEditItem(null);
         setEditName('');
       }
     } catch (error) {
+      toast.error(`Error updating ${type}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       console.error(`Error updating ${type}:`, error);
       setEditItem(null);
       setEditName('');
@@ -290,6 +295,7 @@ const DataManagementPageContent = () => {
 
       if (response.ok) {
         await fetchAllData();
+        toast.success(`${deleteConfirmItem.type.slice(0, -1)} "${deleteConfirmItem.name}" deleted successfully!`);
         
         // Log audit action
         await logClientAuditAction({
@@ -300,10 +306,11 @@ const DataManagementPageContent = () => {
         setDeleteConfirmItem(null);
       } else {
         const errorData = await response.json();
-        alert(`Failed to delete: ${errorData.message || 'Unknown error'}`);
+        toast.error(`Failed to delete: ${errorData.message || 'Unknown error'}`);
         setDeleteConfirmItem(null);
       }
     } catch (error) {
+      toast.error(`Error deleting ${type}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       console.error(`Error deleting ${type}:`, error);
       setDeleteConfirmItem(null);
     }
@@ -363,6 +370,7 @@ const DataManagementPageContent = () => {
         if (response.ok) {
           await fetchAllData();
           setNewItemName('');
+          toast.success(`${entityName} "${newItemName}" added successfully!`);
           
           // Log audit action
           await logClientAuditAction({
@@ -371,10 +379,11 @@ const DataManagementPageContent = () => {
           });
         } else {
           const errorData = await response.json();
-          alert(`Failed to add ${activeTab.slice(0, -1)}: ${errorData.message || 'Unknown error'}`);
+          toast.error(`Failed to add ${entityName}: ${errorData.message || 'Unknown error'}`);
           console.error(`Failed to add ${activeTab}:`, errorData);
         }
       } catch (error) {
+        toast.error(`Error adding ${entityName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         console.error(`Error adding ${activeTab}:`, error);
       }
     };

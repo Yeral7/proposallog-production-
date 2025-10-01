@@ -37,6 +37,8 @@ export default function ManageBuilderContactsModal({ isVisible, onClose, builder
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteName, setDeleteName] = useState<string>("");
+  const [additionalPhones, setAdditionalPhones] = useState<{ type: string; number: string }[]>([]);
+  const PHONE_TYPES = ["Mobile", "Office", "Home", "Fax", "Other"];
 
   useEffect(() => {
     if (!isVisible || !builderId) return;
@@ -60,6 +62,7 @@ export default function ManageBuilderContactsModal({ isVisible, onClose, builder
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
+    setAdditionalPhones([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,11 +76,18 @@ export default function ManageBuilderContactsModal({ isVisible, onClose, builder
     try {
       setIsLoading(true);
       setError(null);
+      // Combine primary and additional phones into the single `phone` field
+      const combinedParts: string[] = [];
+      if (form.phone && form.phone.trim()) combinedParts.push(form.phone.trim());
+      additionalPhones.forEach(p => {
+        if (p.number && p.number.trim()) combinedParts.push(`${p.type}:${p.number.trim()}`);
+      });
+      const combinedPhone = combinedParts.join(' || ');
       if (editingId) {
         const res = await fetchWithAuth(`/api/builder-contacts`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingId, ...form }),
+          body: JSON.stringify({ id: editingId, ...form, phone: combinedPhone || null }),
         });
         if (!res.ok) throw new Error("Failed to update contact");
         const updated = await res.json();
@@ -86,7 +96,7 @@ export default function ManageBuilderContactsModal({ isVisible, onClose, builder
         const res = await fetchWithAuth(`/api/builder-contacts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ builder_id: builderId, ...form }),
+          body: JSON.stringify({ builder_id: builderId, ...form, phone: combinedPhone || null }),
         });
         if (!res.ok) throw new Error("Failed to add contact");
         const created = await res.json();
@@ -102,7 +112,31 @@ export default function ManageBuilderContactsModal({ isVisible, onClose, builder
 
   const startEdit = (contact: BuilderContact) => {
     setEditingId(contact.id);
-    setForm({ name: contact.name, title: contact.title || "", email: contact.email || "", phone: contact.phone || "" });
+    // Parse concatenated phone string into primary and extras
+    const phoneStr = contact.phone || '';
+    const parts = phoneStr.split(' || ').map(p => p.trim()).filter(Boolean);
+    let primary = '';
+    const extras: { type: string; number: string }[] = [];
+    if (parts.length > 0) {
+      const first = parts[0];
+      if (first.includes(':')) {
+        const [_, num] = first.split(':', 2);
+        primary = (num || '').trim();
+      } else {
+        primary = first;
+      }
+      for (let i = 1; i < parts.length; i++) {
+        const token = parts[i];
+        if (token.includes(':')) {
+          const [t, n] = token.split(':', 2);
+          extras.push({ type: (t || 'Other').trim(), number: (n || '').trim() });
+        } else if (token) {
+          extras.push({ type: 'Other', number: token });
+        }
+      }
+    }
+    setForm({ name: contact.name, title: contact.title || "", email: contact.email || "", phone: primary });
+    setAdditionalPhones(extras);
   };
 
   const askDelete = (contact: BuilderContact) => {
@@ -176,6 +210,56 @@ export default function ManageBuilderContactsModal({ isVisible, onClose, builder
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
             />
+
+            {/* Additional Phone Numbers (stored in same phone field) */}
+            <div className="md:col-span-2 border-t pt-3 mt-2">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-700">Additional Phone Numbers</label>
+                <button
+                  type="button"
+                  onClick={() => setAdditionalPhones([...additionalPhones, { type: 'Mobile', number: '' }])}
+                  className="px-3 py-1 text-sm bg-[var(--header-gray)] text-white rounded-md hover:bg-gray-800 flex items-center gap-1"
+                >
+                  <HiPlus className="w-4 h-4" /> Add Phone
+                </button>
+              </div>
+              {additionalPhones.map((phone, index) => (
+                <div key={index} className="flex gap-2 mb-2">
+                  <select
+                    value={phone.type}
+                    onChange={(e) => {
+                      const updated = [...additionalPhones];
+                      updated[index].type = e.target.value;
+                      setAdditionalPhones(updated);
+                    }}
+                    className="border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                  >
+                    {PHONE_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    placeholder="Phone number"
+                    value={phone.number}
+                    onChange={(e) => {
+                      const updated = [...additionalPhones];
+                      updated[index].number = e.target.value;
+                      setAdditionalPhones(updated);
+                    }}
+                    className="flex-1 border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAdditionalPhones(additionalPhones.filter((_, i) => i !== index))}
+                    className="p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200"
+                    aria-label="Remove phone"
+                  >
+                    <HiTrash className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
             <div className="md:col-span-2 flex justify-end gap-2 mt-2">
               {editingId && (
                 <button
@@ -238,7 +322,7 @@ export default function ManageBuilderContactsModal({ isVisible, onClose, builder
                         c.title || ""
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                    <td className="px-4 py-3 text-sm text-gray-900">
                       {editingId === c.id ? (
                         <input
                           type="text"
@@ -247,7 +331,22 @@ export default function ManageBuilderContactsModal({ isVisible, onClose, builder
                           className="w-full border border-gray-300 rounded-md px-2 py-1"
                         />
                       ) : (
-                        c.phone || ""
+                        <div className="flex flex-col gap-1">
+                          {(c.phone || '').split(' || ').filter(Boolean).map((token, idx) => {
+                            const parts = token.split(':');
+                            const hasType = parts.length > 1;
+                            const type = hasType ? parts[0].trim() : '';
+                            const number = hasType ? parts.slice(1).join(':').trim() : token.trim();
+                            if (!number) return null;
+                            return (
+                              <div key={idx} className="flex items-center gap-2">
+                                {hasType && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{type}</span>}
+                                <span>{number}</span>
+                              </div>
+                            );
+                          })}
+                          {!c.phone && <span className="text-gray-400">-</span>}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
