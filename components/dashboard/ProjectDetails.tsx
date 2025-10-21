@@ -166,7 +166,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
             id: drawing.id.toString(),
             title: drawing.title,
             url: drawing.url,
-            date: drawing.created_at || new Date().toISOString()
+            date: drawing.created_at || ''
           })));
         } else {
           console.error('Failed to fetch drawings');
@@ -397,7 +397,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           id: savedDrawing.id.toString(),
           title: savedDrawing.title,
           url: savedDrawing.url,
-          date: savedDrawing.created_at || (isEditMode ? existingDrawing?.date : new Date().toISOString()),
+          date: savedDrawing.created_at || (isEditMode ? (existingDrawing?.date ?? '') : ''),
         };
 
         if (isEditMode) {
@@ -727,7 +727,7 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
                   )}
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mb-4">{formatDateToCharlotte(drawing.date)}</p>
+              <p className="text-sm text-gray-600 mb-4">{drawing.date ? formatDateToCharlotte(drawing.date) : 'No date'}</p>
               
               <div className="flex items-center space-x-2 text-sm text-gray-700 group">
                 <HiEye size={16} className="text-gray-400 flex-shrink-0"/>

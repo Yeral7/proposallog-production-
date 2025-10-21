@@ -65,6 +65,7 @@ export async function POST(
         drawing_url: data.drawing_url || null,
         notes: data.notes || null,
         created_by: session.id,
+        created_at: new Date().toISOString(),
       })
       .select()
       .single();

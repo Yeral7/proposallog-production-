@@ -55,7 +55,8 @@ export async function POST(
       .insert({
         project_id: projectId,
         title: data.title,
-        url: data.url
+        url: data.url,
+        created_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -69,13 +70,8 @@ export async function POST(
       );
     }
     
-    // Ensure created_at has a fallback value
-    const drawingWithTimestamp = {
-      ...newDrawing,
-      created_at: newDrawing.created_at || new Date().toISOString()
-    };
-    
-    return NextResponse.json(drawingWithTimestamp, { status: 201 });
+    // Return the inserted row (now guaranteed to have created_at)
+    return NextResponse.json(newDrawing, { status: 201 });
   } catch (error) {
     console.error('Error creating project drawing:', error);
     return NextResponse.json({ error: 'Failed to create project drawing' }, { status: 500 });
