@@ -70,6 +70,8 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
   const [additionalPhones, setAdditionalPhones] = useState<{ type: string; number: string }[]>([]);
   const PHONE_TYPES = ["Mobile", "Office", "Home", "Fax", "Other"];
   const [contactsSource, setContactsSource] = useState<'builder' | 'project' | 'none'>('none');
+  const [builderContactOptions, setBuilderContactOptions] = useState<Contact[]>([]);
+  const [existingContactId, setExistingContactId] = useState<string>('');
 
   // Data Persistence Effect
   useEffect(() => {
@@ -187,6 +189,34 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
     });
 
   }, [project.id]);
+
+  // Load builder contact options when opening the contact dialog
+  useEffect(() => {
+    const loadBuilderContacts = async () => {
+      try {
+        if (showContactDialog && project.builder_id) {
+          const res = await fetchWithAuth(`/api/builder-contacts?builderId=${project.builder_id}`);
+          if (res.ok) {
+            const data = await res.json();
+            const opts: Contact[] = (Array.isArray(data) ? data : []).map((c: any) => ({
+              id: c.id?.toString(),
+              name: c.name,
+              title: c.title,
+              phone: c.phone,
+              email: c.email,
+            })).filter((c: Contact) => !!c.id && !!c.name);
+            setBuilderContactOptions(opts);
+          }
+        } else {
+          setBuilderContactOptions([]);
+        }
+      } catch (e) {
+        console.error('Failed to load builder contacts for selector', e);
+        setBuilderContactOptions([]);
+      }
+    };
+    loadBuilderContacts();
+  }, [showContactDialog, project.builder_id]);
 
   const handleOpenContactDialog = (contact?: Contact) => {
     setIsEditMode(!!contact);
@@ -362,11 +392,12 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
 
       if (response.ok) {
         const savedDrawing = await response.json();
+        const existingDrawing = drawings.find(d => d.id === (currentDrawing.id || savedDrawing.id.toString()));
         const formattedDrawing = {
           id: savedDrawing.id.toString(),
           title: savedDrawing.title,
           url: savedDrawing.url,
-          date: savedDrawing.created_at || new Date().toISOString(),
+          date: savedDrawing.created_at || (isEditMode ? existingDrawing?.date : new Date().toISOString()),
         };
 
         if (isEditMode) {
@@ -803,6 +834,61 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
             <h3 className="text-lg font-bold mb-4">{isEditMode ? 'Edit Contact' : 'Add Contact'}</h3>
             <div className="space-y-4">
+              {/* Existing Builder Contact selector */}
+              {project.builder_id && builderContactOptions.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Existing Contact (Builder)</label>
+                  <select
+                    value={existingContactId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setExistingContactId(id);
+                      const selected = builderContactOptions.find(c => c.id === id);
+                      if (selected) {
+                        // Parse phone into primary and extras
+                        const phoneStr = selected.phone || '';
+                        const parts = phoneStr.split(' || ').map(p => p.trim()).filter(Boolean);
+                        let primary = '';
+                        const extras: { type: string; number: string }[] = [];
+                        if (parts.length > 0) {
+                          const first = parts[0];
+                          if (first.includes(':')) {
+                            const split = first.split(':', 2);
+                            primary = (split[1] || '').trim();
+                          } else {
+                            primary = first;
+                          }
+                          for (let i = 1; i < parts.length; i++) {
+                            const token = parts[i];
+                            if (token.includes(':')) {
+                              const [t, n] = token.split(':', 2);
+                              extras.push({ type: (t || 'Other').trim(), number: (n || '').trim() });
+                            } else if (token) {
+                              extras.push({ type: 'Other', number: token });
+                            }
+                          }
+                        }
+                        setCurrentContact({
+                          id: selected.id,
+                          name: selected.name,
+                          title: selected.title || '',
+                          phone: primary,
+                          email: selected.email || ''
+                        });
+                        setAdditionalPhones(extras);
+                      }
+                    }}
+                    className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
+                  >
+                    <option value="">Select existing contact</option>
+                    {builderContactOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}{c.title ? ` - ${c.title}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <input type="text" placeholder="Name" value={currentContact.name || ''} onChange={(e) => setCurrentContact({ ...currentContact, name: e.target.value })} className="border p-2 w-full rounded-md" required />
               <input type="text" placeholder="Title" value={currentContact.title || ''} onChange={(e) => setCurrentContact({ ...currentContact, title: e.target.value })} className="border p-2 w-full rounded-md" />
               <input type="text" placeholder="Phone" value={currentContact.phone || ''} onChange={(e) => setCurrentContact({ ...currentContact, phone: e.target.value })} className="border p-2 w-full rounded-md" />
@@ -856,8 +942,6 @@ const ProjectDetails = ({ project }: ProjectDetailsProps) => {
                   </div>
                 ))}
               </div>
-              
-              <p className="text-sm text-gray-600 italic">Note: This contact will be saved to the builder's contact list.</p>
             </div>
             {error && <div className="mt-3 p-3 bg-red-50 text-red-700 rounded-md text-sm">{error}</div>}
             <div className="flex justify-end mt-6 space-x-3">

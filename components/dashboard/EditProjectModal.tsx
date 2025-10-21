@@ -171,18 +171,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
       console.warn('Could not find estimator:', project.estimator_name);
     }
     
-    // Find supervisor ID from name
-    if (project.supervisor_name) {
-      const supervisor = supervisors.find(s => s.name === project.supervisor_name);
-      if (supervisor) {
-        setSupervisorId(supervisor.id.toString());
-      } else {
-        console.warn('Could not find supervisor:', project.supervisor_name);
-        setSupervisorId('');
-      }
-    } else {
-      setSupervisorId('');
-    }
+    // Supervisor field removed per request
     
     // Find status ID from label
     const status = statuses.find(s => s.label === project.status_label);
@@ -298,7 +287,6 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
       project_name: projectName,
       builder_id: parseInt(builderId),
       estimator_id: parseInt(estimatorId),
-      supervisor_id: supervisorId ? parseInt(supervisorId) : null,
       status_id: parseInt(statusId),
       location_id: locationId ? parseInt(locationId) : null,
       due_date: noDueDate ? null : dueDate,
@@ -502,24 +490,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
                   </select>
                 </div>
 
-                <div>
-                  <label htmlFor="supervisor" className="block text-sm font-medium text-gray-700 mb-1">
-                    Supervisor
-                  </label>
-                  <select
-                    id="supervisor"
-                    value={supervisorId}
-                    onChange={(e) => setSupervisorId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
-                  >
-                    <option value="">Select Supervisor</option>
-                    {supervisors.map((supervisor) => (
-                      <option key={supervisor.id} value={supervisor.id}>
-                        {supervisor.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Supervisor field removed per request */}
 
                 <div>
                   <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">

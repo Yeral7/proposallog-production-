@@ -214,7 +214,6 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
       project_name: projectName,
       builder_id: parseInt(builderId),
       estimator_id: parseInt(estimatorId),
-      supervisor_id: supervisorId ? parseInt(supervisorId) : null,
       status_id: parseInt(statusId),
       location_id: locationId ? parseInt(locationId) : null,
       due_date: noDueDate ? null : dueDate,
@@ -338,10 +337,9 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
                         if (selectedProject) {
                           setProjectName(selectedProject.project_name);
                           setEstimatorId(selectedProject.estimator_id.toString());
-                          setSupervisorId(selectedProject.supervisor_id?.toString() || '');
                           setStatusId(selectedProject.status_id.toString());
                           setLocationId(selectedProject.location_id?.toString() || '');
-                          setDueDate(selectedProject.due_date);
+                          setDueDate(selectedProject.due_date || '');
                           setPriorityId(selectedProject.priority_id?.toString() || '');
                           
                           if (selectedProject.contract_value === null) {
@@ -358,7 +356,16 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
                     required={isMultipleBuilder}
                   >
                     <option value="">Select existing project</option>
-                    {existingProjects.map((project) => (
+                    {[...existingProjects]
+                      .sort((a, b) => {
+                        const aName = a.project_name || '';
+                        const bName = b.project_name || '';
+                        const aSpecial = /^[^a-zA-Z0-9]/.test(aName);
+                        const bSpecial = /^[^a-zA-Z0-9]/.test(bName);
+                        if (aSpecial !== bSpecial) return aSpecial ? -1 : 1;
+                        return aName.localeCompare(bName, undefined, { sensitivity: 'base' });
+                      })
+                      .map((project) => (
                       <option key={project.id} value={project.id}>
                         {project.project_name} ({project.builder_name})
                       </option>
@@ -426,24 +433,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
               </select>
             </div>
 
-            <div>
-              <label htmlFor="supervisorId" className="block text-sm font-medium text-gray-700 mb-1">
-                Supervisor
-              </label>
-              <select
-                id="supervisorId"
-                value={supervisorId}
-                onChange={(e) => setSupervisorId(e.target.value)}
-                className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
-              >
-                <option value="">Select Supervisor (Optional)</option>
-                {supervisors.map((supervisor) => (
-                  <option key={supervisor.id} value={supervisor.id}>
-                    {supervisor.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Supervisor field removed per request */}
 
             <div>
               <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
@@ -526,7 +516,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
               <input
                 type="date"
                 id="dueDate"
-                value={dueDate}
+                value={dueDate || ''}
                 onChange={(e) => setDueDate(e.target.value)}
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
                 disabled={noDueDate}
@@ -541,7 +531,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
               <input
                 type="date"
                 id="submissionDate"
-                value={submissionDate}
+                value={submissionDate || ''}
                 onChange={(e) => setSubmissionDate(e.target.value)}
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
               />
