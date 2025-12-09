@@ -14,11 +14,6 @@ interface Estimator {
   name: string;
 }
 
-interface Supervisor {
-  id: number;
-  name: string;
-}
-
 interface Status {
   id: number;
   label: string;
@@ -38,7 +33,6 @@ interface DropdownItem {
 export interface FilterOptions {
   builderId?: string;
   estimatorId?: string;
-  supervisorId?: string;
   statusId?: string;
   locationId?: string;
   dueDate?: string;
@@ -62,7 +56,6 @@ export default function FilterProjectsModal({
 }: FilterProjectsModalProps) {
   const [builders, setBuilders] = useState<DropdownItem[]>([]);
   const [estimators, setEstimators] = useState<DropdownItem[]>([]);
-  const [supervisors, setSupervisors] = useState<DropdownItem[]>([]);
   const [statuses, setStatuses] = useState<DropdownItem[]>([]);
   const [locations, setLocations] = useState<DropdownItem[]>([]);
   const [priorities, setPriorities] = useState<DropdownItem[]>([]);
@@ -78,7 +71,6 @@ export default function FilterProjectsModal({
   // Form state
   const [builderId, setBuilderId] = useState(currentFilters.builderId || '');
   const [estimatorId, setEstimatorId] = useState(currentFilters.estimatorId || '');
-  const [supervisorId, setSupervisorId] = useState(currentFilters.supervisorId || '');
   const [statusId, setStatusId] = useState(currentFilters.statusId || '');
   const [locationId, setLocationId] = useState(currentFilters.locationId || '');
   const [dueDate, setDueDate] = useState(currentFilters.dueDate || '');
@@ -96,7 +88,6 @@ export default function FilterProjectsModal({
   useEffect(() => {
     setBuilderId(currentFilters.builderId || '');
     setEstimatorId(currentFilters.estimatorId || '');
-    setSupervisorId(currentFilters.supervisorId || '');
     setStatusId(currentFilters.statusId || '');
     setLocationId(currentFilters.locationId || '');
     setDueDate(currentFilters.dueDate || '');
@@ -115,10 +106,6 @@ export default function FilterProjectsModal({
       const estimatorsData = await estimatorsRes.json();
       setEstimators(Array.isArray(estimatorsData) ? estimatorsData : []);
       
-      const supervisorsRes = await fetchWithAuth('/api/supervisors');
-      if (!supervisorsRes.ok) throw new Error(`Failed to fetch supervisors: ${supervisorsRes.statusText}`);
-      const supervisorsData = await supervisorsRes.json();
-      setSupervisors(Array.isArray(supervisorsData) ? supervisorsData : []);
 
       const statusesRes = await fetchWithAuth('/api/statuses');
       if (!statusesRes.ok) throw new Error(`Failed to fetch statuses: ${statusesRes.statusText}`);
@@ -146,7 +133,6 @@ export default function FilterProjectsModal({
     const filters: FilterOptions = {
       builderId: builderId || undefined,
       estimatorId: estimatorId || undefined,
-      supervisorId: supervisorId || undefined,
       statusId: statusId || undefined,
       locationId: locationId || undefined,
       dueDate: dueDate || undefined,
@@ -160,7 +146,6 @@ export default function FilterProjectsModal({
   const handleClearFilters = () => {
     setBuilderId('');
     setEstimatorId('');
-    setSupervisorId('');
     setStatusId('');
     setLocationId('');
     setDueDate('');
@@ -225,24 +210,6 @@ export default function FilterProjectsModal({
               </select>
             </div>
             
-            <div>
-              <label htmlFor="supervisorId" className="block text-sm font-medium text-gray-700 mb-1">
-                Supervisor
-              </label>
-              <select
-                id="supervisorId"
-                value={supervisorId}
-                onChange={(e) => setSupervisorId(e.target.value)}
-                className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
-              >
-                <option value="">All Supervisors</option>
-                {Array.isArray(supervisors) && supervisors.length > 0 ? supervisors.map((supervisor) => (
-                  <option key={supervisor.id} value={supervisor.id}>
-                    {supervisor.name}
-                  </option>
-                )) : <option disabled>No supervisors available</option>}
-              </select>
-            </div>
 
             <div>
               <label htmlFor="statusId" className="block text-sm font-medium text-gray-700 mb-1">

@@ -133,7 +133,6 @@ export default function ProposalLogPage() {
     // Apply dropdown filters
     if (filters.builderId) result = result.filter(p => p.builder_id?.toString() === filters.builderId);
     if (filters.estimatorId) result = result.filter(p => p.estimator_id?.toString() === filters.estimatorId);
-    if (filters.supervisorId) result = result.filter(p => p.supervisor_id?.toString() === filters.supervisorId);
     if (filters.statusId) result = result.filter(p => p.status_id?.toString() === filters.statusId);
     if (filters.locationId) result = result.filter(p => p.location_id?.toString() === filters.locationId);
     if (filters.priorityId) result = result.filter(p => p.priority_id?.toString() === filters.priorityId);

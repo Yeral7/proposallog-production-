@@ -12,7 +12,6 @@ export async function GET() {
         *,
         builders:builder_id(name),
         estimators:estimator_id(name),
-        supervisors:supervisor_id(name),
         statuses:status_id(label),
         locations:location_id(name),
         priorities:priority_id(name)
@@ -34,8 +33,6 @@ export async function GET() {
       builder_name: project.builders?.name || 'N/A',
       estimator_id: project.estimator_id,
       estimator_name: project.estimators?.name || 'N/A',
-      supervisor_id: project.supervisor_id,
-      supervisor_name: project.supervisors?.name || 'N/A',
       status_id: project.status_id,
       status_label: project.statuses?.label || 'N/A',
       status_name: project.statuses?.label || 'N/A', // Add status_name for conditional checks

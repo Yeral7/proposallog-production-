@@ -19,11 +19,6 @@ interface Estimator {
   name: string;
 }
 
-interface Supervisor {
-  id: number;
-  name: string;
-}
-
 interface Status {
   id: number;
   label: string;
@@ -53,7 +48,6 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
   const [showAwardedConfirmation, setShowAwardedConfirmation] = useState(false);
   const [builders, setBuilders] = useState<Builder[]>([]);
   const [estimators, setEstimators] = useState<Estimator[]>([]);
-  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [priorities, setPriorities] = useState<Priority[]>([]);
@@ -68,7 +62,6 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
   const [projectName, setProjectName] = useState('');
   const [builderId, setBuilderId] = useState('');
   const [estimatorId, setEstimatorId] = useState('');
-  const [supervisorId, setSupervisorId] = useState('');
   const [statusId, setStatusId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -84,7 +77,6 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
   const fallbackData = {
     builders: [{id: 1, name: "Default Builder"}],
     estimators: [{id: 1, name: "Default Estimator"}],
-    supervisors: [{id: 1, name: "Default Supervisor"}],
     statuses: [{id: 1, label: "Pending"}],
     locations: [{id: 1, name: "Default Location"}]
   };
@@ -98,7 +90,6 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
           // Use fallback data if fetch fails
           setBuilders(fallbackData.builders);
           setEstimators(fallbackData.estimators);
-          setSupervisors(fallbackData.supervisors);
           setStatuses(fallbackData.statuses);
           setLocations(fallbackData.locations);
           setError('Using default data. Some options may be limited.');
@@ -113,7 +104,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
     if (project && isVisible) {
       populateForm();
     }
-  }, [project, isVisible, builders, estimators, statuses, supervisors, locations, priorities]);
+  }, [project, isVisible, builders, estimators, statuses, locations, priorities]);
 
   // Populate the form with project data
   const populateForm = () => {
@@ -226,8 +217,6 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
       const estimators = await fetchData('/api/estimators', 'Estimators');
       setEstimators(estimators);
       
-      const supervisors = await fetchData('/api/supervisors', 'Supervisors');
-      setSupervisors(supervisors);
 
       const statuses = await fetchData('/api/statuses', 'Statuses');
       setStatuses(statuses);

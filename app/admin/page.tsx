@@ -42,11 +42,6 @@ interface EstimatorRow {
   user_id: number | null;
 }
 
-interface SupervisorRow {
-  id: number;
-  name: string;
-  user_id: number | null;
-}
 
 interface PositionRow {
   id: number;
@@ -85,8 +80,7 @@ const AdminPage = () => {
   const [roleEdits, setRoleEdits] = useState<Record<number, 'viewer' | 'manager' | 'admin'>>({});
   const [savingUserIds, setSavingUserIds] = useState<number[]>([]);
   const [estimators, setEstimators] = useState<EstimatorRow[]>([]);
-  const [supervisors, setSupervisors] = useState<SupervisorRow[]>([]);
-  const [linkEdits, setLinkEdits] = useState<Record<number, { estimatorId?: number | null; supervisorId?: number | null }>>({});
+  const [linkEdits, setLinkEdits] = useState<Record<number, { estimatorId?: number | null }>>({});
   const [usersCurrentPage, setUsersCurrentPage] = useState(1);
   // Positions state
   const [positions, setPositions] = useState<PositionRow[]>([]);
@@ -258,7 +252,6 @@ const AdminPage = () => {
     if (activeTab === 'users') {
       fetchUsers();
       fetchEstimators();
-      fetchSupervisors();
       fetchPositions();
     } else if (activeTab === 'positions' || activeTab === 'createUser') {
       fetchPositions();
@@ -310,7 +303,6 @@ const AdminPage = () => {
   const refreshUsers = () => {
     fetchUsers();
     fetchEstimators();
-    fetchSupervisors();
   };
 
   const fetchEstimators = async () => {
@@ -325,19 +317,6 @@ const AdminPage = () => {
     }
   };
 
-  const fetchSupervisors = async () => {
-    try {
-      const res = await fetchWithAuth('/api/supervisors');
-      if (res.ok) {
-        const data: SupervisorRow[] = await res.json();
-        // Normalize to only fields we use
-        const normalized = (Array.isArray(data) ? data : []).map((s: any) => ({ id: s.id, name: s.name, user_id: s.user_id ?? null }));
-        setSupervisors(normalized);
-      }
-    } catch (e) {
-      console.error('Error fetching supervisors:', e);
-    }
-  };
 
   const fetchPositions = async () => {
     setPositionsLoading(true);
@@ -440,23 +419,19 @@ const AdminPage = () => {
   const saveUserChanges = async (user: UserRow) => {
     const selectedRole = roleEdits[user.id];
     const originalEstimatorId = estimators.find((e) => e.user_id === user.id)?.id ?? null;
-    const originalSupervisorId = supervisors.find((s) => s.user_id === user.id)?.id ?? null;
     const edited = linkEdits[user.id] || {};
     const effectiveEstimatorId = edited.estimatorId !== undefined ? edited.estimatorId : originalEstimatorId;
-    const effectiveSupervisorId = edited.supervisorId !== undefined ? edited.supervisorId : originalSupervisorId;
 
     const roleChanged = !!selectedRole && selectedRole !== user.role;
     const estChanged = effectiveEstimatorId !== originalEstimatorId;
-    const supChanged = effectiveSupervisorId !== originalSupervisorId;
 
-    if (!roleChanged && !estChanged && !supChanged) return;
+    if (!roleChanged && !estChanged) return;
 
     setSavingUserIds((prev) => (prev.includes(user.id) ? prev : [...prev, user.id]));
     try {
       const payload: any = {};
       if (roleChanged) payload.role = selectedRole;
       if (estChanged) payload.estimatorId = effectiveEstimatorId ?? null;
-      if (supChanged) payload.supervisorId = effectiveSupervisorId ?? null;
 
       const res = await fetchWithAuth(`/api/users/${user.id}`, {
         method: 'PATCH',
@@ -476,7 +451,6 @@ const AdminPage = () => {
       }
       // Refresh lists to reflect new links
       if (estChanged) await fetchEstimators();
-      if (supChanged) await fetchSupervisors();
       // Clear link edits for this user
       setLinkEdits((prev) => {
         const { [user.id]: _, ...rest } = prev;
@@ -486,7 +460,6 @@ const AdminPage = () => {
       const parts: string[] = [];
       if (roleChanged) parts.push(`role → ${selectedRole}`);
       if (estChanged) parts.push(`estimator → ${effectiveEstimatorId ?? 'none'}`);
-      if (supChanged) parts.push(`supervisor → ${effectiveSupervisorId ?? 'none'}`);
       await logClientAuditAction({
         page: 'Admin - User Management',
         action: `Updated ${user.name || user.email}: ${parts.join(', ')}`,
@@ -952,7 +925,6 @@ const AdminPage = () => {
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estimator</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisor</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Positions</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -963,19 +935,13 @@ const AdminPage = () => {
                           .map((user) => {
                             const currentValue = roleEdits[user.id] ?? user.role;
                             const originalEstimatorId = estimators.find((e) => e.user_id === user.id)?.id ?? null;
-                            const originalSupervisorId = supervisors.find((s) => s.user_id === user.id)?.id ?? null;
                             const selectedEstimatorId =
                               linkEdits[user.id]?.estimatorId !== undefined
                                 ? linkEdits[user.id]?.estimatorId ?? null
                                 : originalEstimatorId;
-                            const selectedSupervisorId =
-                              linkEdits[user.id]?.supervisorId !== undefined
-                                ? linkEdits[user.id]?.supervisorId ?? null
-                                : originalSupervisorId;
                             const changed =
                               currentValue !== user.role ||
-                              selectedEstimatorId !== originalEstimatorId ||
-                              selectedSupervisorId !== originalSupervisorId;
+                              selectedEstimatorId !== originalEstimatorId;
                             const isSaving = savingUserIds.includes(user.id);
                             return (
                               <tr key={user.id} className={changed ? 'bg-yellow-50' : ''}>
@@ -1010,35 +976,6 @@ const AdminPage = () => {
                                       >
                                         {est.name}
                                         {est.user_id !== null && est.user_id !== user.id ? ' (linked)' : ''}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  <select
-                                    value={selectedSupervisorId ?? ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setLinkEdits((prev) => ({
-                                        ...prev,
-                                        [user.id]: {
-                                          ...(prev[user.id] || {}),
-                                          supervisorId: val === '' ? null : parseInt(val, 10),
-                                        },
-                                      }));
-                                    }}
-                                    disabled={isSaving}
-                                    className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] focus:border-transparent"
-                                  >
-                                    <option value="">None</option>
-                                    {supervisors.map((sup) => (
-                                      <option
-                                        key={sup.id}
-                                        value={sup.id}
-                                        disabled={sup.user_id !== null && sup.user_id !== user.id}
-                                      >
-                                        {sup.name}
-                                        {sup.user_id !== null && sup.user_id !== user.id ? ' (linked)' : ''}
                                       </option>
                                     ))}
                                   </select>

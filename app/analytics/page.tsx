@@ -47,8 +47,6 @@ interface Project {
   builder_name: string;
   estimator_id: number;
   estimator_name: string;
-  supervisor_id: number;
-  supervisor_name: string;
   location_id: number;
   location_name: string;
   status_id: number;

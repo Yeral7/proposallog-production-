@@ -18,11 +18,6 @@ interface Estimator {
   name: string;
 }
 
-interface Supervisor {
-  id: number;
-  name: string;
-}
-
 interface Status {
   id: number;
   label: string;
@@ -53,8 +48,6 @@ interface Project {
   builder_name: string;
   estimator_id: number;
   estimator_name: string;
-  supervisor_id: number | null;
-  supervisor_name: string | null;
   status_id: number;
   status_label: string;
   location_id: number | null;
@@ -71,7 +64,6 @@ interface Project {
 export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: AddProjectModalProps) {
   const [builders, setBuilders] = useState<Builder[]>([]);
   const [estimators, setEstimators] = useState<Estimator[]>([]);
-  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [priorities, setPriorities] = useState<Priority[]>([]);
@@ -89,7 +81,6 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
   const [projectName, setProjectName] = useState('');
   const [builderId, setBuilderId] = useState('');
   const [estimatorId, setEstimatorId] = useState('');
-  const [supervisorId, setSupervisorId] = useState('');
   const [statusId, setStatusId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -104,7 +95,6 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
   const fallbackData = {
     builders: [{id: 1, name: "Default Builder"}],
     estimators: [{id: 1, name: "Default Estimator"}],
-    supervisors: [{id: 1, name: "Default Supervisor"}],
     statuses: [{id: 1, label: "Pending"}],
     locations: [{id: 1, name: "Default Location"}]
   };
@@ -117,7 +107,6 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
           // Use fallback data if fetch fails
           setBuilders(fallbackData.builders);
           setEstimators(fallbackData.estimators);
-          setSupervisors(fallbackData.supervisors);
           setStatuses(fallbackData.statuses);
           setLocations(fallbackData.locations);
           setError('Using default data. Some options may be limited.');
@@ -156,8 +145,6 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
       const estimators = await fetchData('/api/estimators', 'Estimators');
       setEstimators(estimators);
       
-      const supervisors = await fetchData('/api/supervisors', 'Supervisors');
-      setSupervisors(supervisors);
 
       const statuses = await fetchData('/api/statuses', 'Statuses');
       setStatuses(statuses);
@@ -185,7 +172,6 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
     setProjectName('');
     setBuilderId('');
     setEstimatorId('');
-    setSupervisorId('');
     setStatusId('');
     setLocationId('');
     setDueDate('');

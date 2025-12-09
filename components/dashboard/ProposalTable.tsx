@@ -10,8 +10,6 @@ export interface Project {
   builder_name: string;
   estimator_id: number;
   estimator_name: string;
-  supervisor_id: number | null;
-  supervisor_name: string | null;
   status_id: number;
   status_label: string;
   status_name: string;

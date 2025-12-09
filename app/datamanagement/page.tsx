@@ -23,10 +23,6 @@ interface Estimator {
   name: string;
 }
 
-interface Supervisor {
-  id: number;
-  name: string;
-}
 
 interface Location {
   id: number;
@@ -54,7 +50,7 @@ interface ResidentialStatus {
 }
 
 // Define the type for the active tab
-type ActiveTab = 'builders' | 'estimators' | 'supervisors' | 'locations' | 'project_types' | 'project_styles' | 'progress_statuses' | 'subcontractors' | 'residential_statuses';
+type ActiveTab = 'builders' | 'estimators' | 'locations' | 'project_types' | 'project_styles' | 'progress_statuses' | 'subcontractors' | 'residential_statuses';
 
 const DataManagementPage = () => {
   return (
@@ -68,7 +64,6 @@ const DataManagementPageContent = () => {
   const { canDeleteData } = useAuth();
   const [builders, setBuilders] = useState<Builder[]>([]);
   const [estimators, setEstimators] = useState<Estimator[]>([]);
-  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [projectTypes, setProjectTypes] = useState<ProjectType[]>([]);
   const [projectStyles, setProjectStyles] = useState<ProjectStyle[]>([]);
@@ -102,10 +97,9 @@ const DataManagementPageContent = () => {
       // Fetch different builder data based on management type
       const buildersEndpoint = managementType === 'residential' ? '/api/residential-builders' : '/api/builders';
       
-      const [buildersRes, estimatorsRes, supervisorsRes, locationsRes, projectTypesRes, projectStylesRes, progressStatusesRes] = await Promise.all([
+      const [buildersRes, estimatorsRes, locationsRes, projectTypesRes, projectStylesRes, progressStatusesRes] = await Promise.all([
         fetchWithAuth(buildersEndpoint),
         fetchWithAuth('/api/estimators'),
-        fetchWithAuth('/api/supervisors'),
         fetchWithAuth('/api/locations'),
         fetchWithAuth('/api/project-types'),
         fetchWithAuth('/api/project-styles'),
@@ -114,7 +108,6 @@ const DataManagementPageContent = () => {
 
       const buildersData = await buildersRes.json();
       const estimatorsData = await estimatorsRes.json();
-      const supervisorsData = await supervisorsRes.json();
       const locationsData = await locationsRes.json();
       const projectTypesData = await projectTypesRes.json();
       const projectStylesData = await projectStylesRes.json();
@@ -123,7 +116,6 @@ const DataManagementPageContent = () => {
       // API returns data directly as arrays, not wrapped in objects
       setBuilders(Array.isArray(buildersData) ? buildersData : []);
       setEstimators(Array.isArray(estimatorsData) ? estimatorsData : []);
-      setSupervisors(Array.isArray(supervisorsData) ? supervisorsData : []);
       setLocations(Array.isArray(locationsData) ? locationsData : []);
       setProjectTypes(Array.isArray(projectTypesData) ? projectTypesData : []);
       setProjectStyles(Array.isArray(projectStylesData) ? projectStylesData : []);
@@ -146,7 +138,6 @@ const DataManagementPageContent = () => {
       console.log('Fetched data:', {
         builders: buildersData,
         estimators: estimatorsData,
-        supervisors: supervisorsData,
         locations: locationsData
       });
 
@@ -336,10 +327,6 @@ const DataManagementPageContent = () => {
             endpoint = '/api/estimators';
             entityName = 'Estimator';
             break;
-          case 'supervisors':
-            endpoint = '/api/supervisors';
-            entityName = 'Supervisor';
-            break;
           case 'locations':
             endpoint = '/api/locations';
             entityName = 'Location';
@@ -402,11 +389,6 @@ const DataManagementPageContent = () => {
             data = estimators;
             placeholder = 'Add new estimator...';
             entityName = 'Estimators';
-            break;
-        case 'supervisors':
-            data = supervisors;
-            placeholder = 'Add new supervisor...';
-            entityName = 'Supervisors';
             break;
         case 'locations':
             data = locations;
@@ -581,7 +563,6 @@ const DataManagementPageContent = () => {
                 <>
                   <TabButton tabName="builders" label="Builders" icon={HiOutlineOfficeBuilding} />
                   <TabButton tabName="estimators" label="Estimators" icon={HiOutlineUser} />
-                  <TabButton tabName="supervisors" label="Supervisors" icon={HiOutlineUser} />
                   <TabButton tabName="locations" label="Locations" icon={HiOutlineLocationMarker} />
                   <TabButton tabName="project_types" label="Project Types" icon={HiOutlineCollection} />
                   <TabButton tabName="project_styles" label="Project Styles" icon={HiOutlineColorSwatch} />

@@ -16,10 +16,9 @@ export async function PATCH(
     const supabase = getDb();
     const body = await request.json();
 
-    const { role, estimatorId, supervisorId, positions } = body as {
+    const { role, estimatorId, positions } = body as {
       role?: 'viewer' | 'manager' | 'admin';
       estimatorId?: number | null;
-      supervisorId?: number | null;
       positions?: { add?: number[]; remove?: number[]; primaryId?: number | null };
     };
 
@@ -60,29 +59,6 @@ export async function PATCH(
       }
     }
 
-    // Handle supervisor link changes
-    if (typeof supervisorId !== 'undefined') {
-      // Clear any existing supervisor linked to this user
-      const { error: clearSupErr } = await supabase
-        .from('supervisors')
-        .update({ user_id: null })
-        .eq('user_id', userId);
-      if (clearSupErr) {
-        console.error('Error clearing supervisor link:', clearSupErr);
-        return NextResponse.json({ error: 'Failed to update supervisor link' }, { status: 500 });
-      }
-      // If new supervisorId provided (not null), link it
-      if (supervisorId) {
-        const { error: setSupErr } = await supabase
-          .from('supervisors')
-          .update({ user_id: userId })
-          .eq('id', supervisorId);
-        if (setSupErr) {
-          console.error('Error setting supervisor link:', setSupErr);
-          return NextResponse.json({ error: 'Failed to set supervisor link' }, { status: 500 });
-        }
-      }
-    }
 
     // Manage positions via user_positions
     if (typeof positions !== 'undefined') {
