@@ -69,6 +69,69 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const { id, name } = await request.json();
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Project style ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!name || name.trim() === '') {
+      return NextResponse.json(
+        { error: 'Project style name is required' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getDb();
+
+    const { data: existingStyle } = await supabase
+      .from('project_styles')
+      .select('id')
+      .eq('name', name.trim())
+      .neq('id', id)
+      .single();
+
+    if (existingStyle) {
+      return NextResponse.json(
+        { error: 'Project style with this name already exists' },
+        { status: 409 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('project_styles')
+      .update({ name: name.trim() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json(
+        { error: 'Failed to update project style', details: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Project style updated successfully',
+      data
+    });
+  } catch (error) {
+    console.error('Error updating project style:', error);
+    return NextResponse.json(
+      { error: 'Failed to update project style' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

@@ -70,6 +70,69 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const { id, name } = await request.json();
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Progress status ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!name || name.trim() === '') {
+      return NextResponse.json(
+        { error: 'Progress status name is required' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getDb();
+
+    const { data: existingStatus } = await supabase
+      .from('progress_statuses')
+      .select('id')
+      .eq('name', name.trim())
+      .neq('id', id)
+      .single();
+
+    if (existingStatus) {
+      return NextResponse.json(
+        { error: 'Progress status with this name already exists' },
+        { status: 409 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('progress_statuses')
+      .update({ name: name.trim() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json(
+        { error: 'Failed to update progress status', details: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Progress status updated successfully',
+      data
+    });
+  } catch (error) {
+    console.error('Error updating progress status:', error);
+    return NextResponse.json(
+      { error: 'Failed to update progress status' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

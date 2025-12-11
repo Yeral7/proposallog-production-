@@ -247,8 +247,14 @@ const DataManagementPageContent = () => {
         setEditItem(null);
         setEditName('');
       } else {
-        const errorData = await response.json();
-        toast.error(`Failed to update: ${errorData.message || 'Unknown error'}`);
+        let errorMessage = 'Unknown error';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || 'Unknown error';
+        } catch {
+          errorMessage = `Server error (${response.status})`;
+        }
+        toast.error(`Failed to update: ${errorMessage}`);
         setEditItem(null);
         setEditName('');
       }
@@ -296,8 +302,14 @@ const DataManagementPageContent = () => {
         
         setDeleteConfirmItem(null);
       } else {
-        const errorData = await response.json();
-        toast.error(`Failed to delete: ${errorData.message || 'Unknown error'}`);
+        let errorMessage = 'Unknown error';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || 'Unknown error';
+        } catch {
+          errorMessage = `Server error (${response.status})`;
+        }
+        toast.error(`Failed to delete: ${errorMessage}`);
         setDeleteConfirmItem(null);
       }
     } catch (error) {

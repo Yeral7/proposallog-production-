@@ -69,6 +69,69 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const { id, name } = await request.json();
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Project type ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!name || name.trim() === '') {
+      return NextResponse.json(
+        { error: 'Project type name is required' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getDb();
+
+    const { data: existingType } = await supabase
+      .from('project_types')
+      .select('id')
+      .eq('name', name.trim())
+      .neq('id', id)
+      .single();
+
+    if (existingType) {
+      return NextResponse.json(
+        { error: 'Project type with this name already exists' },
+        { status: 409 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('project_types')
+      .update({ name: name.trim() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json(
+        { error: 'Failed to update project type', details: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Project type updated successfully',
+      data
+    });
+  } catch (error) {
+    console.error('Error updating project type:', error);
+    return NextResponse.json(
+      { error: 'Failed to update project type' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
