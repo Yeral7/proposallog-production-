@@ -12,6 +12,7 @@ import ImportProjectModal from "../../components/dashboard/ImportProjectModal";
 import EditProjectModal from "../../components/dashboard/EditProjectModal";
 import FilterProjectsModal, { FilterOptions } from "../../components/dashboard/FilterProjectsModal";
 import ProjectDetails from "../../components/dashboard/ProjectDetails";
+import ReportsModal, { ReportConfig } from "../../components/dashboard/ReportsModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { logClientAuditAction } from '@/lib/clientAuditLogger';
 
@@ -34,9 +35,11 @@ export default function ProposalLogPage() {
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isReportsModalOpen, setIsReportsModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [detailsProject, setDetailsProject] = useState<Project | null>(null);
   const [exportedProjectData, setExportedProjectData] = useState<Project | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const projectDetailsRef = React.useRef<HTMLDivElement>(null);
   
   // Search and filter states
@@ -323,6 +326,91 @@ export default function ProposalLogPage() {
     setExportedProjectData(exportData);
   };
 
+  const reportInitialConfig = useMemo<ReportConfig>(() => ({
+    scope: 'filtered',
+    reportType: 'detailed_summary',
+    selectedColumns: [
+      'project_name',
+      'builder_name',
+      'estimator_name',
+      'status_label',
+      'location_name',
+      'due_date',
+      'submission_date',
+      'follow_up_date',
+      'contract_value',
+      'priority_name',
+    ],
+    useCurrentTableSorting: true,
+    sortField,
+    sortDirection,
+    searchText,
+    filters,
+  }), [filters, searchText, sortDirection, sortField]);
+
+  const handleGenerateReport = async (config: ReportConfig) => {
+    setIsGeneratingReport(true);
+
+    try {
+      const response = await fetchWithAuth('/api/reports/proposals', {
+        method: 'POST',
+        body: JSON.stringify(config),
+        headers: {
+          Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to generate report';
+
+        try {
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } else {
+            const errorText = await response.text();
+            if (errorText) {
+              errorMessage = errorText;
+            }
+          }
+        } catch (parseError) {
+          console.error('Error parsing report generation response:', parseError);
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get('content-disposition') || '';
+      const fileNameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+      const fileName = fileNameMatch?.[1] || `proposal-report-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      setIsReportsModalOpen(false);
+      setNotification(`Report downloaded: ${fileName}`);
+      setTimeout(() => setNotification(null), 5000);
+
+      await logClientAuditAction({
+        page: 'Proposal Log',
+        action: `Generated report: ${config.reportType} (${config.scope})`
+      });
+    } catch (error) {
+      console.error('Error generating report:', error);
+      setNotification(error instanceof Error ? error.message : 'Failed to generate report');
+      setTimeout(() => setNotification(null), 5000);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-accent">
       <Header />
@@ -373,6 +461,12 @@ export default function ProposalLogPage() {
               {canEditProjects() ? (
                 <>
                   <button 
+                    onClick={() => setIsReportsModalOpen(true)}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-[var(--primary-color)] hover:bg-[var(--secondary-color)] text-white rounded-md flex items-center gap-2 shadow-sm justify-center"
+                  >
+                    Reports
+                  </button>
+                  <button 
                     onClick={() => setIsAddModalOpen(true)}
                     className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-[var(--primary-color)] hover:bg-[var(--secondary-color)] text-white rounded-md flex items-center gap-2 shadow-sm justify-center"
                   >
@@ -389,6 +483,13 @@ export default function ProposalLogPage() {
                 </>
               ) : (
                 <>
+                  <button 
+                    disabled
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-gray-300 text-gray-500 rounded-md flex items-center gap-2 shadow-sm justify-center cursor-not-allowed"
+                    title="View Only - No Reports Permission"
+                  >
+                    Reports
+                  </button>
                   <button 
                     disabled
                     className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-gray-300 text-gray-500 rounded-md flex items-center gap-2 shadow-sm justify-center cursor-not-allowed"
@@ -426,6 +527,11 @@ export default function ProposalLogPage() {
               {error}
             </div>
           )}
+          {notification && (
+            <div className="mb-4 p-3 bg-blue-50 text-blue-700 rounded-md text-sm">
+              {notification}
+            </div>
+          )}
           {isLoading ? (
             <div className="flex justify-center items-center h-32">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
@@ -461,8 +567,6 @@ export default function ProposalLogPage() {
         </div>
       </main>
       
-      
-      {/* Modals */}
       <AddProjectModal 
         isVisible={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
@@ -488,6 +592,16 @@ export default function ProposalLogPage() {
         onClose={() => setIsFilterModalOpen(false)}
         onApplyFilters={(newFilters) => setFilters(newFilters)}
         currentFilters={filters}
+      />
+      
+      <ReportsModal
+        isVisible={isReportsModalOpen}
+        onClose={() => setIsReportsModalOpen(false)}
+        onGenerate={handleGenerateReport}
+        initialConfig={reportInitialConfig}
+        filteredRowCount={filteredProjects.length}
+        totalRowCount={projects.length}
+        isGenerating={isGeneratingReport}
       />
     </div>
   );
