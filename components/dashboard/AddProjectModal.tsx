@@ -53,6 +53,7 @@ interface Project {
   location_id: number | null;
   location_name: string | null;
   due_date: string;
+  estimation_due_date?: string | null;
   submission_date?: string | null;
   follow_up_date?: string | null;
   contract_value: number | null;
@@ -84,6 +85,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
   const [statusId, setStatusId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [estimationDueDate, setEstimationDueDate] = useState('');
   const [contractValue, setContractValue] = useState('');
   const [noContractValue, setNoContractValue] = useState(false);
   const [noDueDate, setNoDueDate] = useState(false);
@@ -179,6 +181,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
     setNoContractValue(false);
     setDueDate('');
     setNoDueDate(false);
+    setEstimationDueDate('');
     setPriorityId('');
     setSubmissionDate('');
     setIsMultipleBuilder(false);
@@ -203,6 +206,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
       status_id: parseInt(statusId),
       location_id: locationId ? parseInt(locationId) : null,
       due_date: noDueDate ? null : dueDate,
+      estimation_due_date: estimationDueDate || null,
       contract_value: noContractValue || !contractValue ? null : parseFloat(contractValue),
       reference_project_id: isMultipleBuilder && referenceProjectId ? parseInt(referenceProjectId) : null,
       priority_id: priorityId ? parseInt(priorityId) : null,
@@ -326,6 +330,8 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
                           setStatusId(selectedProject.status_id.toString());
                           setLocationId(selectedProject.location_id?.toString() || '');
                           setDueDate(selectedProject.due_date || '');
+                          setNoDueDate(!selectedProject.due_date);
+                          setEstimationDueDate(selectedProject.estimation_due_date || '');
                           setPriorityId(selectedProject.priority_id?.toString() || '');
                           
                           if (selectedProject.contract_value === null) {
@@ -484,7 +490,7 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700">
-                  Due Date
+                  Bid Due Date
                 </label>
                 <div className="flex items-center">
                   <input
@@ -507,6 +513,19 @@ export default function AddProjectModal({ isVisible, onClose, onProjectAdded }: 
                 className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
                 disabled={noDueDate}
                 required={!noDueDate}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="estimationDueDate" className="block text-sm font-medium text-gray-700 mb-1">
+                Estimation Due Date (optional)
+              </label>
+              <input
+                type="date"
+                id="estimationDueDate"
+                value={estimationDueDate}
+                onChange={(e) => setEstimationDueDate(e.target.value)}
+                className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
               />
             </div>
 

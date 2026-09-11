@@ -14,6 +14,7 @@ export type ReportColumn =
   | 'status_label'
   | 'location_name'
   | 'due_date'
+  | 'estimation_due_date'
   | 'submission_date'
   | 'follow_up_date'
   | 'contract_value'
@@ -49,9 +50,10 @@ const columnOptions: Array<{ value: ReportColumn; label: string; defaultSelected
   { value: 'estimator_name', label: 'Estimator', defaultSelected: true },
   { value: 'status_label', label: 'Status', defaultSelected: true },
   { value: 'location_name', label: 'Location', defaultSelected: true },
-  { value: 'due_date', label: 'Due Date', defaultSelected: true },
+  { value: 'due_date', label: 'Bid Due Date', defaultSelected: true },
+  { value: 'estimation_due_date', label: 'Estimation Due Date', defaultSelected: true },
   { value: 'submission_date', label: 'Submission Date', defaultSelected: true },
-  { value: 'follow_up_date', label: 'Follow-up Date', defaultSelected: true },
+  { value: 'follow_up_date', label: 'Follow-up Date', defaultSelected: false },
   { value: 'contract_value', label: 'Contract Value', defaultSelected: true },
   { value: 'priority_name', label: 'Priority', defaultSelected: true },
   { value: 'contacts', label: 'Contacts', defaultSelected: false },
@@ -63,7 +65,8 @@ const sortOptions: Array<{ value: Exclude<SortField, null>; label: string }> = [
   { value: 'project_name', label: 'Project Name' },
   { value: 'builder_name', label: 'Builder' },
   { value: 'location', label: 'Location' },
-  { value: 'due_date', label: 'Due Date' },
+  { value: 'due_date', label: 'Bid Due Date' },
+  { value: 'estimation_due_date', label: 'Estimation Due Date' },
   { value: 'estimator', label: 'Estimator' },
   { value: 'priority', label: 'Priority' },
   { value: 'status', label: 'Status' },

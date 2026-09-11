@@ -8,6 +8,7 @@ import { logClientAuditAction } from '@/lib/clientAuditLogger';
 import Banner from '../../components/Banner';
 import Header from '../../components/Header';
 import ProtectedRoute from '../../components/ProtectedRoute';
+import NotionSyncPanel from '../../components/dashboard/NotionSyncPanel';
 import { toast } from 'react-toastify';
 
 interface AuditLog {
@@ -56,7 +57,7 @@ interface UserPosition {
   is_primary: boolean;
 }
 
-type AdminTab = 'audit' | 'users' | 'positions' | 'createUser';
+type AdminTab = 'audit' | 'users' | 'positions' | 'createUser' | 'notionSync';
 
 const AdminPage = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>('audit');
@@ -554,11 +555,22 @@ const AdminPage = () => {
                       Create User
                     </div>
                   </button>
+                  <button
+                    onClick={() => setActiveTab('notionSync')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'notionSync'
+                        ? 'border-[var(--primary-color)] text-[var(--primary-color)]'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Notion Sync
+                  </button>
                 </nav>
               </div>
             </div>
 
             {/* Tab Content */}
+            {activeTab === 'notionSync' && <NotionSyncPanel />}
             {activeTab === 'audit' && (
               <div className="bg-white rounded-lg shadow-md border border-gray-200">
                 {/* Header with search and refresh */}

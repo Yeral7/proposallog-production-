@@ -181,7 +181,7 @@ export default function ProposalLogPage() {
         if (bValue == null) return -1;
 
         // Handle dates
-        if (['due_date', 'submission_date', 'follow_up_date'].includes(sortField!)) {
+        if (['due_date', 'estimation_due_date', 'submission_date', 'follow_up_date'].includes(sortField!)) {
           const dateA = new Date(aValue as string).getTime();
           const dateB = new Date(bValue as string).getTime();
           if (isNaN(dateA)) return 1;
@@ -337,7 +337,7 @@ export default function ProposalLogPage() {
       'location_name',
       'due_date',
       'submission_date',
-      'follow_up_date',
+      'estimation_due_date',
       'contract_value',
       'priority_name',
     ],

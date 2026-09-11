@@ -17,6 +17,7 @@ export interface Project {
   location_id: number | null;
   location_name: string | null;
   due_date: string | null;
+  estimation_due_date?: string | null;
   submission_date: string | null;
   follow_up_date: string | null;
   contract_value: number | null;
@@ -26,7 +27,7 @@ export interface Project {
 }
 
 export type SortDirection = 'asc' | 'desc' | null;
-export type SortField = 'project_name' | 'builder_name' | 'location' | 'due_date' | 'estimator' | 'priority' | 'status' | 'submission_date' | 'contract_value' | 'follow_up_date' | null;
+export type SortField = 'project_name' | 'builder_name' | 'location' | 'due_date' | 'estimator' | 'priority' | 'status' | 'submission_date' | 'contract_value' | 'estimation_due_date' | 'follow_up_date' | null;
 
 interface ProposalTableProps {
   projects: Project[];
@@ -133,7 +134,7 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
               </th>
               <th className="py-4 px-4 text-left">
                 <button onClick={() => handleSort('due_date')} className="flex items-center hover:text-blue-500 focus:outline-none">
-                  Due Date
+                  Bid Due Date
                   {renderSortIcon('due_date')}
                 </button>
               </th>
@@ -168,9 +169,9 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
                 </button>
               </th>
               <th className="py-4 px-4 text-left">
-                <button onClick={() => handleSort('follow_up_date')} className="flex items-center hover:text-blue-500 focus:outline-none">
-                  Follow-up Date
-                  {renderSortIcon('follow_up_date')}
+                <button onClick={() => handleSort('estimation_due_date')} className="flex items-center hover:text-blue-500 focus:outline-none">
+                  Estimation Due Date
+                  {renderSortIcon('estimation_due_date')}
                 </button>
               </th>
             </tr>
@@ -259,9 +260,9 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
                   {project.contract_value ? `$${Number(project.contract_value).toLocaleString()}` : 'N/A'}
                 </td>
                 <td className="py-4 px-4">
-                  {project.follow_up_date && project.follow_up_date.trim() 
+                  {project.estimation_due_date && project.estimation_due_date.trim()
                     ? (() => {
-                        const date = new Date(project.follow_up_date);
+                        const date = new Date(project.estimation_due_date);
                         if (isNaN(date.getTime())) return 'Invalid Date';
                         return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC' }).format(date);
                       })()

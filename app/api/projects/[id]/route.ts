@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '../../../../lib/db';
+import { isDateOnly } from '../../../../lib/timezone';
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -18,6 +19,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const supabase = getDb();
     
     const { lost_reason, user_id, ...projectData } = data;
+
+    if (Object.hasOwn(projectData, 'estimation_due_date')) {
+      if (projectData.estimation_due_date === '') projectData.estimation_due_date = null;
+      if (projectData.estimation_due_date !== null && !isDateOnly(projectData.estimation_due_date)) {
+        return NextResponse.json({ error: 'Estimation due date must be a valid YYYY-MM-DD date or null.' }, { status: 400 });
+      }
+    }
 
     // Correctly validate only the fields that are always required.
     if (!projectData.project_name || !projectData.builder_id || !projectData.estimator_id || !projectData.status_id) {

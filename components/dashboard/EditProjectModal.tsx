@@ -65,6 +65,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
   const [statusId, setStatusId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [estimationDueDate, setEstimationDueDate] = useState('');
   const [noDueDate, setNoDueDate] = useState(false);
   const [contractValue, setContractValue] = useState('');
   const [noContractValue, setNoContractValue] = useState(false);
@@ -112,6 +113,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
     
     // Set text fields first
     setProjectName(project.project_name);
+    setEstimationDueDate(project.estimation_due_date || '');
 
     if (project.due_date) {
       setDueDate(project.due_date);
@@ -279,10 +281,10 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
       status_id: parseInt(statusId),
       location_id: locationId ? parseInt(locationId) : null,
       due_date: noDueDate ? null : dueDate,
+      estimation_due_date: estimationDueDate || null,
       contract_value: noContractValue || !contractValue ? null : parseFloat(contractValue),
       priority_id: priorityId ? parseInt(priorityId) : null,
       submission_date: submissionDate || null,
-      follow_up_date: followUpDate || null,
       lost_reason: reason,
     };
 
@@ -538,7 +540,7 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700">
-                      Due Date
+                      Bid Due Date
                     </label>
                     <div className="flex items-center">
                       <input
@@ -565,6 +567,19 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
                 </div>
 
                 <div>
+                  <label htmlFor="estimationDueDate" className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimation Due Date (optional)
+                  </label>
+                  <input
+                    type="date"
+                    id="estimationDueDate"
+                    value={estimationDueDate}
+                    onChange={(e) => setEstimationDueDate(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
                   <label htmlFor="submissionDate" className="block text-sm font-medium text-gray-700 mb-1">
                     Submission Date
                   </label>
@@ -579,13 +594,14 @@ export default function EditProjectModal({ isVisible, onClose, onProjectUpdated,
 
                 <div>
                   <label htmlFor="followUpDate" className="block text-sm font-medium text-gray-700 mb-1">
-                    Follow-up Date
+                    Follow-up Date (managed in Notion)
                   </label>
                   <input
                     type="date"
                     id="followUpDate"
                     value={followUpDate}
-                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    readOnly
+                    disabled
                     className="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>

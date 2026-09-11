@@ -1,6 +1,12 @@
 // Timezone utility functions for Charlotte, NC (Eastern Time)
 // Handles both EST and EDT automatically
 
+export function isDateOnly(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-')) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 // Normalize date inputs: if a string lacks timezone info, treat it as UTC.
 function toDateAssumingUTC(dateInput: string | Date | number): Date {
   if (typeof dateInput === 'string') {

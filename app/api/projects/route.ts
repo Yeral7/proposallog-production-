@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '../../../lib/db';
+import { isDateOnly } from '../../../lib/timezone';
 
 export async function GET() {
   try {
@@ -40,6 +41,7 @@ export async function GET() {
       location_id: project.location_id,
       location_name: project.locations?.name || 'N/A',
       due_date: project.due_date,
+      estimation_due_date: project.estimation_due_date ?? null,
       submission_date: project.submission_date,
       follow_up_date: project.follow_up_date,
       contract_value: project.contract_value,
@@ -71,6 +73,13 @@ export async function POST(request: Request) {
         { error: 'Missing required fields: project_name, builder_id, estimator_id, and status_id are required.' },
         { status: 400 }
       );
+    }
+
+    if (Object.hasOwn(projectData, 'estimation_due_date')) {
+      if (projectData.estimation_due_date === '') projectData.estimation_due_date = null;
+      if (projectData.estimation_due_date !== null && !isDateOnly(projectData.estimation_due_date)) {
+        return NextResponse.json({ error: 'Estimation due date must be a valid YYYY-MM-DD date or null.' }, { status: 400 });
+      }
     }
 
     const insertData = { ...projectData };

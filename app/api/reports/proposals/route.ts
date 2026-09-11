@@ -12,6 +12,7 @@ type ReportColumn =
   | 'status_label'
   | 'location_name'
   | 'due_date'
+  | 'estimation_due_date'
   | 'submission_date'
   | 'follow_up_date'
   | 'contract_value'
@@ -21,7 +22,7 @@ type ReportColumn =
   | 'lost_reason';
 
 type SortDirection = 'asc' | 'desc' | null;
-type SortField = 'project_name' | 'builder_name' | 'location' | 'due_date' | 'estimator' | 'priority' | 'status' | 'submission_date' | 'contract_value' | 'follow_up_date' | null;
+type SortField = 'project_name' | 'builder_name' | 'location' | 'due_date' | 'estimation_due_date' | 'estimator' | 'priority' | 'status' | 'submission_date' | 'contract_value' | 'follow_up_date' | null;
 
 interface FilterOptions {
   builderId?: string;
@@ -55,6 +56,7 @@ interface ProposalRow {
   location_id: number | null;
   location_name: string | null;
   due_date: string | null;
+  estimation_due_date: string | null;
   submission_date: string | null;
   follow_up_date: string | null;
   contract_value: number | null;
@@ -71,7 +73,8 @@ const columnLabels: Record<ReportColumn, string> = {
   estimator_name: 'Estimator',
   status_label: 'Status',
   location_name: 'Location',
-  due_date: 'Due Date',
+  due_date: 'Bid Due Date',
+  estimation_due_date: 'Estimation Due Date',
   submission_date: 'Submission Date',
   follow_up_date: 'Follow-up Date',
   contract_value: 'Contract Value',
@@ -81,7 +84,7 @@ const columnLabels: Record<ReportColumn, string> = {
   lost_reason: 'Lost Reason',
 };
 
-const dateColumns = new Set<ReportColumn>(['due_date', 'submission_date', 'follow_up_date']);
+const dateColumns = new Set<ReportColumn>(['due_date', 'estimation_due_date', 'submission_date', 'follow_up_date']);
 const currencyColumns = new Set<ReportColumn>(['contract_value']);
 const priorityOrder = ['Overdue', 'High', 'Medium', 'Low', 'Not Set', null];
 
@@ -240,7 +243,7 @@ function sortRows(rows: ProposalRow[], field: SortField, direction: SortDirectio
     if (aValue == null) return 1;
     if (bValue == null) return -1;
 
-    if (['due_date', 'submission_date', 'follow_up_date'].includes(field)) {
+    if (['due_date', 'estimation_due_date', 'submission_date', 'follow_up_date'].includes(field)) {
       const aDate = new Date(aValue as string).getTime();
       const bDate = new Date(bValue as string).getTime();
       if (Number.isNaN(aDate)) return 1;
@@ -461,6 +464,7 @@ export async function POST(request: NextRequest) {
       location_id: project.location_id,
       location_name: project.locations?.name || 'N/A',
       due_date: project.due_date,
+      estimation_due_date: project.estimation_due_date ?? null,
       submission_date: project.submission_date,
       follow_up_date: project.follow_up_date,
       contract_value: project.contract_value,
