@@ -88,13 +88,13 @@ export function createNotionReader(config: SyncConfig, fetcher: typeof fetch = f
       if (source.archived || source.in_trash) throw new Error('The selected Notion data source is archived.');
       return source as { id: string; properties: Record<string, NotionProperty> };
     },
-    async pages(dataSourceId: string) {
+    async pages(dataSourceId: string, filter?: Record<string, any>) {
       checkedId(dataSourceId);
       const pages: any[] = [];
       const cursors = new Set<string>();
       let cursor: string | undefined;
       for (let batch = 0; batch < 20; batch++) {
-        const result = await request(`data_sources/${dataSourceId}/query`, { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
+        const result = await request(`data_sources/${dataSourceId}/query`, { page_size: 100, ...(filter ? { filter } : {}), ...(cursor ? { start_cursor: cursor } : {}) });
         if (!Array.isArray(result.results)) throw new Error('Invalid Notion query response.');
         pages.push(...result.results.filter((page: any) => !page.archived && !page.in_trash));
         if (!result.has_more) return pages;
@@ -128,7 +128,7 @@ function propertyText(page: any, name: string) {
 }
 
 export async function loadNotionSource(db: SupabaseClient, config: SyncConfig, options: { limit: number; projectId?: number; afterProjectId?: number }) {
-  const raw = await readRows(() => db.from('projects').select('id, reference_project_id, project_name, builder_id, estimator_id, location_id, status_id, priority_id, due_date, estimation_due_date, submission_date, follow_up_date, contract_value, lost_reason, builders:builder_id(name), estimators:estimator_id(name), statuses:status_id(label), locations:location_id(name), priorities:priority_id(name)'), 'projects');
+  const raw = await readRows(() => db.from('projects').select('id, reference_project_id, project_name, builder_id, estimator_id, location_id, status_id, priority_id, due_date, estimation_due_date, submission_date, follow_up_date, contract_value, lost_reason, builders:builder_id(name), estimators:estimator_id(name), statuses:status_id(label), locations:location_id(name), priorities:priority_id(name)').is('archived_at', null), 'projects');
   const projects: ProjectSource[] = raw.map(row => ({
     ...row,
     builder_name: row.builders?.name ?? null,

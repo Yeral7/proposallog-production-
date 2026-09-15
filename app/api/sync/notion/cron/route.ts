@@ -6,12 +6,13 @@ import { pullNotionChanges } from '@/lib/notionInbound';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const tally = (results: { action?: string }[]) =>
   results.reduce<Record<string, number>>((acc, row) => ((acc[row.action || 'unknown'] = (acc[row.action || 'unknown'] || 0) + 1), acc), {});
 
 export async function GET(request: NextRequest) {
+  const start = Date.now();
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       }
     }
     const cursor = Number(await readJournalValue(db, config, 'cron:publishCursor')) || 0;
-    const publish = await publishNotionProjects(db, config, { dryRun: false, limit: 100, afterProjectId: cursor });
+    const publish = await publishNotionProjects(db, config, { dryRun: false, limit: 10, afterProjectId: cursor, deadlineMs: start + 40_000 });
     const nextAfterProjectId = publish.nextAfterProjectId ?? 0;
     await writeJournalValue(db, config, 'cron:publishCursor', nextAfterProjectId);
     for (const row of publish.results) {

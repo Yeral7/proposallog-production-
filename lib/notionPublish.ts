@@ -113,7 +113,7 @@ function syncTarget(config: Config) {
 }
 
 const LOCK_MESSAGE = 'Another publisher is running, or its lock survived an interrupted run. Check the sync lock before retrying.';
-const LOCK_LEASE_MS = 120_000;
+const LOCK_LEASE_MS = 60_000;
 
 async function withSupabaseState<T>(config: Config, dryRun: boolean, db: SupabaseClient | undefined, action: (state: SavedState, save: () => Promise<void>) => Promise<T>) {
   if (!db) throw new Error('The Supabase sync state store requires a database client.');
@@ -245,10 +245,88 @@ export async function setupNotionPublishing(config: Config, dryRun = true, db?: 
   }, db);
 }
 
-export async function publishNotionProjects(db: SupabaseClient, config: Config, options: { dryRun?: boolean; limit: number; projectId?: number; afterProjectId?: number }) {
+function idPropertyFilter(schema: Schema, projectId: number) {
+  const identity = schema[ID_FIELD];
+  return identity?.type === 'number'
+    ? { property: ID_FIELD, number: { equals: projectId } }
+    : { property: ID_FIELD, rich_text: { equals: String(projectId) } };
+}
+
+function titlePropertyFilter(name: string, type: string, value: string) {
+  return { property: name, [type === 'title' ? 'title' : 'rich_text']: { equals: value } };
+}
+
+export async function trashNotionPages(db: SupabaseClient, config: Config, options: { projectId: number; rootId: number; newRootId?: number | null }) {
+  assertTarget(config, false);
+  return withState(config, false, async (journal, save) => {
+    const request = createNotionRequest(config);
+    const reader = createNotionReader(config, fetch, request);
+    const proposals = await reader.discover(config.proposalDatabaseId, config.proposalDataSourceId);
+    const estimated = await reader.discover(config.estimatedDatabaseId, config.estimatedDataSourceId);
+    const trashed: string[] = [];
+    if (options.newRootId != null) {
+      // Root deleted but the group survives: re-key the shared pages to the new root.
+      for (const dataSource of [proposals, estimated]) {
+        const oldKey = `${dataSource.id}:${options.rootId}`;
+        let pageId = journal[oldKey]?.pageId;
+        if (!pageId) {
+          const matches = await reader.pages(dataSource.id, idPropertyFilter(dataSource.properties, options.rootId));
+          pageId = matches[0]?.id;
+        }
+        if (!pageId) continue;
+        const identity = dataSource.properties[ID_FIELD];
+        const value = identity.type === 'number' ? { number: options.newRootId } : textProperty(String(options.newRootId));
+        await request(`pages/${pageId}`, { properties: { [identity.id]: value } }, 'PATCH');
+        const newKey = `${dataSource.id}:${options.newRootId}`;
+        journal[newKey] = journal[oldKey] ?? { pageId };
+        delete journal[oldKey];
+        await save();
+      }
+      return { trashed, estimatedTrashed: false, republishProjectId: options.newRootId };
+    }
+    const rootMembers: number[] = [];
+    for (const [column, value] of [['id', options.rootId], ['reference_project_id', options.rootId]] as const) {
+      const { data, error } = await db.from('projects').select('id').eq(column, value).is('archived_at', null);
+      if (error) throw new Error('Could not check the project group before trashing the estimated page.');
+      for (const row of (data || []) as { id: number }[]) if (!rootMembers.includes(row.id)) rootMembers.push(row.id);
+    }
+    // The group's shared Proposal Log page carries the root ID; only trash it once no member is left.
+    const proposalIds = [...new Set(rootMembers.length ? (options.projectId === options.rootId ? [] : [options.projectId]) : [options.projectId, options.rootId])];
+    for (const id of proposalIds) {
+      const proposalKey = `${proposals.id}:${id}`;
+      let proposalPageId = journal[proposalKey]?.pageId;
+      if (!proposalPageId) {
+        const matches = await reader.pages(proposals.id, idPropertyFilter(proposals.properties, id));
+        proposalPageId = matches[0]?.id;
+      }
+      if (!proposalPageId || trashed.some(existing => normalizedId(existing) === normalizedId(proposalPageId!))) continue;
+      await request(`pages/${proposalPageId}`, { in_trash: true }, 'PATCH');
+      trashed.push(proposalPageId);
+      if (journal[proposalKey]) { delete journal[proposalKey]; await save(); }
+    }
+    const estimatedKey = `${estimated.id}:${options.rootId}`;
+    let estimatedTrashed = false;
+    if (!rootMembers.length) {
+      let estimatedPageId = journal[estimatedKey]?.pageId;
+      if (!estimatedPageId) {
+        const matches = await reader.pages(estimated.id, idPropertyFilter(estimated.properties, options.rootId));
+        estimatedPageId = matches[0]?.id;
+      }
+      if (estimatedPageId) {
+        await request(`pages/${estimatedPageId}`, { in_trash: true }, 'PATCH');
+        trashed.push(estimatedPageId);
+        estimatedTrashed = true;
+        if (journal[estimatedKey]) { delete journal[estimatedKey]; await save(); }
+      }
+    }
+    return { trashed, estimatedTrashed, republishProjectId: rootMembers[0] ?? null };
+  }, db);
+}
+
+export async function publishNotionProjects(db: SupabaseClient, config: Config, options: { dryRun?: boolean; limit: number; projectId?: number; afterProjectId?: number; deadlineMs?: number }) {
   const dryRun = options.dryRun !== false;
   assertTarget(config, dryRun);
-  if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 100 || (options.projectId !== undefined && (!Number.isSafeInteger(options.projectId) || options.projectId <= 0)) || (options.afterProjectId !== undefined && (!Number.isSafeInteger(options.afterProjectId) || options.afterProjectId < 0)) || (options.dryRun !== undefined && typeof options.dryRun !== 'boolean')) throw new Error('Invalid publish options.');
+  if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 100 || (options.projectId !== undefined && (!Number.isSafeInteger(options.projectId) || options.projectId <= 0)) || (options.afterProjectId !== undefined && (!Number.isSafeInteger(options.afterProjectId) || options.afterProjectId < 0)) || (options.deadlineMs !== undefined && !Number.isFinite(options.deadlineMs)) || (options.dryRun !== undefined && typeof options.dryRun !== 'boolean')) throw new Error('Invalid publish options.');
   return withState(config, dryRun, async (journal, save) => {
     const source = await loadNotionSource(db, config, options);
     const request = createNotionRequest(config);
@@ -261,8 +339,24 @@ export async function publishNotionProjects(db: SupabaseClient, config: Config, 
     const relation = Object.values(proposals.properties).find(property => property.type === 'relation' && normalizedId(property.relation.data_source_id || '') === normalizedId(estimated.id))!;
     const estimatedTitle = Object.values(estimated.properties).find(property => property.type === 'title');
     if (!estimatedTitle) throw new Error('Estimated Projects needs a title property.');
-    const proposalPages = await reader.pages(proposals.id);
-    const estimatedPages = await reader.pages(estimated.id);
+    let proposalPages: any[];
+    let estimatedPages: any[];
+    if (options.projectId !== undefined) {
+      const groupId = source.proposals[0]?.projectId ?? options.projectId;
+      const projectName = String(source.proposals[0]?.values.project_name || '');
+      const merge = (target: any[], extra: any[]) => {
+        for (const page of extra) if (!target.some(existing => normalizedId(existing.id) === normalizedId(page.id))) target.push(page);
+      };
+      const proposalTitle = Object.entries(proposals.properties).find(([, property]) => property.type === 'title');
+      const estimatedTitleEntry = Object.entries(estimated.properties).find(([, property]) => property === estimatedTitle)!;
+      proposalPages = await reader.pages(proposals.id, idPropertyFilter(proposals.properties, groupId));
+      if (proposalTitle && projectName) merge(proposalPages, await reader.pages(proposals.id, titlePropertyFilter(proposalTitle[0], proposalTitle[1].type, projectName)));
+      estimatedPages = await reader.pages(estimated.id, idPropertyFilter(estimated.properties, groupId));
+      if (projectName) merge(estimatedPages, await reader.pages(estimated.id, titlePropertyFilter(estimatedTitleEntry[0], estimatedTitleEntry[1].type, projectName)));
+    } else {
+      proposalPages = await reader.pages(proposals.id);
+      estimatedPages = await reader.pages(estimated.id);
+    }
     const results: { projectId: number; sourceProjectId: number; action: string; notionPageId?: string; warnings?: string[]; error?: string }[] = [];
 
     async function upsert(dataSource: typeof proposals, pages: any[], projectId: number, properties: Record<string, any>, sourceProjectId: number, requireTitle = true) {
@@ -316,6 +410,7 @@ export async function publishNotionProjects(db: SupabaseClient, config: Config, 
 
     let interrupted = false;
     for (const proposal of source.proposals) {
+      if (options.deadlineMs !== undefined && Date.now() > options.deadlineMs) { interrupted = true; break; }
       try {
         const properties: Record<string, any> = {};
         const warnings: string[] = [];
@@ -343,6 +438,6 @@ export async function publishNotionProjects(db: SupabaseClient, config: Config, 
         if ([401, 403, 429].includes((error as { status?: number }).status)) { interrupted = true; break; }
       }
     }
-    return { dryRun, supabaseWrites: 0, interrupted, nextAfterProjectId: interrupted ? results[results.length - 1].projectId - 1 : source.nextAfterProjectId, sourceProjectCount: source.sourceProjectCount, groupedProjectCount: source.groupedProjectCount, issues: source.issues, results };
+    return { dryRun, supabaseWrites: 0, interrupted, nextAfterProjectId: interrupted ? (results.length ? results[results.length - 1].projectId - 1 : (options.afterProjectId ?? 0)) : source.nextAfterProjectId, sourceProjectCount: source.sourceProjectCount, groupedProjectCount: source.groupedProjectCount, issues: source.issues, results };
   }, db);
 }

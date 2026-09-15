@@ -23,6 +23,7 @@ export async function GET(
         builders:builder_id(name)
       `)
       .eq('id', projectId)
+      .is('archived_at', null)
       .single();
     
     if (!currentProject) {
@@ -41,6 +42,7 @@ export async function GET(
       `)
       .neq('id', projectId)
       .neq('builder_id', currentProject.builder_id)
+      .is('archived_at', null)
       .limit(3);
 
     // Transform the data to match expected format

@@ -98,7 +98,8 @@ export const db = {
         locations(name),
         supervisors(name)
       `)
-    
+      .is('archived_at', null)
+
     if (error) throw error
     return data
   },

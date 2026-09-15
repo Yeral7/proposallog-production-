@@ -9,7 +9,7 @@ type Config = ReturnType<typeof getNotionSyncConfig>;
 type Schema = Record<string, NotionProperty>;
 const sameId = (a: string, b: string) => Boolean(a && b) && a.replace(/-/g, '').toLowerCase() === b.replace(/-/g, '').toLowerCase();
 const DRY_PAGE_ID = '00000000-0000-0000-0000-000000000000';
-const PROJECT_SELECT = 'id, reference_project_id, project_name, builder_id, estimator_id, location_id, status_id, priority_id, due_date, estimation_due_date, submission_date, follow_up_date, contract_value, lost_reason, builders:builder_id(name), estimators:estimator_id(name), statuses:status_id(label), locations:location_id(name), priorities:priority_id(name)';
+const PROJECT_SELECT = 'id, reference_project_id, project_name, builder_id, estimator_id, location_id, status_id, priority_id, due_date, estimation_due_date, submission_date, follow_up_date, contract_value, lost_reason, archived_at, builders:builder_id(name), estimators:estimator_id(name), statuses:status_id(label), locations:location_id(name), priorities:priority_id(name)';
 
 async function readTable(db: SupabaseClient, table: string, columns: string): Promise<any[]> {
   const { data, error } = await db.from(table).select(columns);
@@ -89,8 +89,16 @@ export async function pullNotionChanges(db: SupabaseClient, config: Config, opti
     let matchBuilder = createNameMatcher(builders);
     let supabaseWrites = 0;
 
+    const journalPageByProject = new Map<number, string>();
+    const journalPrefix = `${proposals.id}:`;
+    for (const [key, value] of Object.entries(journal)) {
+      if (key.startsWith(journalPrefix) && (value as any)?.pageId) {
+        const projectId = Number(key.slice(journalPrefix.length));
+        if (Number.isSafeInteger(projectId) && projectId > 0) journalPageByProject.set(projectId, String((value as any).pageId));
+      }
+    }
     const storedIds = proposalPages.map(page => readId(page, schema).trim()).filter(Boolean);
-    const numericIds = [...new Set(storedIds.map(id => Number(id)).filter(id => Number.isSafeInteger(id) && id > 0))];
+    const numericIds = [...new Set([...storedIds.map(id => Number(id)), ...journalPageByProject.keys()].filter(id => Number.isSafeInteger(id) && id > 0))];
     const { data: projectRowsData, error: projectError } = numericIds.length
       ? await db.from('projects').select(PROJECT_SELECT).in('id', numericIds)
       : { data: [], error: null };
@@ -231,6 +239,45 @@ export async function pullNotionChanges(db: SupabaseClient, config: Config, opti
     const queue = options.pageId
       ? proposalPages.filter(page => sameId(page.id, options.pageId!))
       : [...newPages, ...linkedPages];
+
+    const archiveProject = async (projectId: number, notionPageId: string | undefined) => {
+      if (!dryRun) {
+        const { error } = await db.from('projects').update({ archived_at: new Date().toISOString() }).eq('id', projectId);
+        if (error) throw new Error(`Could not archive project ${projectId}.`);
+        supabaseWrites++;
+      }
+      results.push({ action: dryRun ? 'would_archive' : 'archived', projectId, notionPageId });
+    };
+
+    const livePageIds = proposalPages.map(page => page.id);
+    const missingLinked: { projectId: number; pageId: string }[] = [];
+    for (const [projectId, pageId] of journalPageByProject) {
+      if (livePageIds.some(id => sameId(id, pageId))) continue;
+      const project = projectById.get(projectId) as any;
+      if (!project || project.archived_at) continue;
+      missingLinked.push({ projectId, pageId });
+    }
+
+    if (options.pageId && !queue.length) {
+      const page = await reader.page(options.pageId).catch(() => undefined);
+      if (page && (page.in_trash || page.archived)) {
+        let projectId: number | null = null;
+        for (const [pid, id] of journalPageByProject) if (sameId(id, options.pageId)) { projectId = pid; break; }
+        if (!projectId) projectId = Number(readId(page, schema)) || null;
+        if (projectId && !(projectById.get(projectId) as any)?.archived_at) await archiveProject(projectId, page.id);
+      }
+    } else if (!options.pageId) {
+      for (const missing of missingLinked.slice(0, 10)) {
+        try {
+          const page = await reader.page(missing.pageId).catch(() => undefined);
+          if (page && (page.in_trash || page.archived)) await archiveProject(missing.projectId, page.id);
+          else results.push({ action: 'orphan', notionPageId: missing.pageId, projectId: missing.projectId });
+        } catch (error) {
+          results.push({ action: 'blocked', notionPageId: missing.pageId, projectId: missing.projectId, error: error instanceof Error ? error.message : 'Inbound sync failed' });
+        }
+      }
+    }
+
     let interrupted = false;
     let hasMore = false;
     let written = 0;
@@ -248,6 +295,15 @@ export async function pullNotionChanges(db: SupabaseClient, config: Config, opti
         if (journal[key]?.pending) throw new Error('Uncertain previous insert; reconcile the journal before retrying.');
         if (stored) {
           const project = projectById.get(Number(stored))!;
+          if ((project as any).archived_at) {
+            if (!dryRun) {
+              const { error } = await db.from('projects').update({ archived_at: null }).eq('id', project.id);
+              if (error) throw new Error(`Could not restore project ${project.id}.`);
+              supabaseWrites++;
+            }
+            results.push({ action: 'restored', projectId: project.id, notionPageId: page.id });
+            (project as any).archived_at = null;
+          }
           const remote = readNotionSnapshot(page, bindings);
           if (remote.issues.length) throw new Error(remote.issues.join(' '));
           const plan = planInboundUpdate(page, projectSnapshot(project), remote.values, bindings, schema);

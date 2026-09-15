@@ -3,6 +3,9 @@ import { getDb } from '../../../lib/db';
 import { isDateOnly } from '../../../lib/timezone';
 import { schedulePublish } from '../../../lib/notionAfterSave';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 export async function GET() {
   try {
     const supabase = getDb();
@@ -17,7 +20,8 @@ export async function GET() {
         statuses:status_id(label),
         locations:location_id(name),
         priorities:priority_id(name)
-      `);
+      `)
+      .is('archived_at', null);
     
     if (error) {
       console.error('Supabase error:', error);

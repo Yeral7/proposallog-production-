@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
         project_name
       `)
       .eq('status_id', awardedStatus.id)
+      .is('archived_at', null)
       .order('project_name');
 
     // Only add the not.in filter if there are ongoing projects to exclude

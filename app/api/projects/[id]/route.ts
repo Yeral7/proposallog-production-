@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '../../../../lib/db';
 import { isDateOnly } from '../../../../lib/timezone';
-import { schedulePublish } from '../../../../lib/notionAfterSave';
+import { schedulePublish, trashNotionProject } from '../../../../lib/notionAfterSave';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -107,7 +110,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     // Check if project exists
     const { data: existingProject } = await supabase
       .from('projects')
-      .select('id')
+      .select('id, reference_project_id')
       .eq('id', projectId)
       .single();
       
@@ -116,6 +119,45 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         { error: 'Project not found' },
         { status: 404 }
       );
+    }
+
+    const rootId = existingProject.reference_project_id ?? projectId;
+
+    // If a group root is deleted while GC-bid members remain, hand the root
+    // over to the lowest-id member first so the group (and the shared Notion
+    // pages keyed by the root ID) survives. Re-parenting runs before the
+    // delete so a failure leaves the group intact.
+    let newRootId: number | null = null;
+    if (existingProject.reference_project_id == null) {
+      const { data: members, error: membersError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('reference_project_id', projectId)
+        .order('id');
+      if (membersError) {
+        console.error('Error reading project group:', membersError);
+        return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 });
+      }
+      if (members?.length) {
+        newRootId = members[0].id;
+        const { error: promoteError } = await supabase
+          .from('projects')
+          .update({ reference_project_id: null })
+          .eq('id', newRootId);
+        if (promoteError) {
+          console.error('Error promoting new group root:', promoteError);
+          return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 });
+        }
+        const { error: reparentError } = await supabase
+          .from('projects')
+          .update({ reference_project_id: newRootId })
+          .eq('reference_project_id', projectId)
+          .neq('id', newRootId);
+        if (reparentError) {
+          console.error('Error re-parenting project group:', reparentError);
+          return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 });
+        }
+      }
     }
 
     // Division association deletion removed
@@ -132,6 +174,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         { error: 'Failed to delete project' },
         { status: 500 }
       );
+    }
+
+    try { trashNotionProject(projectId, rootId, newRootId); } catch (trashError) {
+      console.error('Notion delete-sync scheduling failed', projectId, trashError);
     }
 
     return NextResponse.json({ 

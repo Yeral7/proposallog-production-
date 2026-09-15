@@ -446,7 +446,8 @@ export async function POST(request: NextRequest) {
         statuses:status_id(label),
         locations:location_id(name),
         priorities:priority_id(name)
-      `);
+      `)
+      .is('archived_at', null);
 
     if (error) {
       return NextResponse.json({ error: 'Database query error', details: error.message }, { status: 500 });

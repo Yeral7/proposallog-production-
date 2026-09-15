@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const HANDLED = ['page.created', 'page.properties_updated', 'page.content_updated'];
+const HANDLED = ['page.created', 'page.properties_updated', 'page.content_updated', 'page.deleted', 'page.undeleted'];
 const sameId = (a: string, b: string) => Boolean(a && b) && a.replace(/-/g, '').toLowerCase() === b.replace(/-/g, '').toLowerCase();
 
 async function pullWithRetry(pageId: string) {
