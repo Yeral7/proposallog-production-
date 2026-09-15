@@ -24,6 +24,7 @@ import {
     HiOutlineCalendar,
 } from 'react-icons/hi';
 import { useAuth } from '../contexts/AuthContext';
+import { LABOR_LOG_ENABLED } from '../lib/featureFlags';
 // @branch feature/schedulesprototype
 import RoleViewSwitcher from './labor-log/RoleViewSwitcher';
 
@@ -50,7 +51,7 @@ const Sidebar = () => {
     // @branch feature/schedulesprototype
     // A "labor only" user is one who has labor permissions but no
     // estimation:access — they should see ONLY the Labor Log link.
-    const laborOnly = canAccessLaborLog() && !canAccessProposalLog();
+    const laborOnly = LABOR_LOG_ENABLED && canAccessLaborLog() && !canAccessProposalLog();
 
     const navLinks: NavItem[] = [
         // Estimation/proposal-log side — hidden entirely for labor-only users.
@@ -63,7 +64,7 @@ const Sidebar = () => {
 
         // @branch feature/schedulesprototype
         // Labor-log — only shows for users with any labor:* permission.
-        { title: 'Labor Log',        link: '/labor-log',        icon: <HiOutlineCalendar size={22} />,    visible: canAccessLaborLog() },
+        { title: 'Labor Log',        link: '/labor-log',        icon: <HiOutlineCalendar size={22} />,    visible: LABOR_LOG_ENABLED && canAccessLaborLog() },
 
         // Admin tools — visible only for users with estimation admin role.
         { title: 'Data Management',  link: '/datamanagement',   icon: <HiOutlineCog size={22} />,         visible: canAccessDataManagement() },
@@ -110,9 +111,11 @@ const Sidebar = () => {
             </nav>
 
             {/* @branch feature/schedulesprototype — Role/view switcher */}
-            <div className="pt-4 border-t border-gray-700">
-                <RoleViewSwitcher />
-            </div>
+            {LABOR_LOG_ENABLED && (
+                <div className="pt-4 border-t border-gray-700">
+                    <RoleViewSwitcher />
+                </div>
+            )}
 
             {/* Version */}
             <div className="mt-2">

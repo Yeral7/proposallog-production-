@@ -18,6 +18,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getAllUsers } from '../lib/laborLog/mockData';
 import { getViewAsUserId, setViewAsUserId } from '../lib/laborLog/store';
 import type { SectionId } from '../lib/laborLog/types';
+import { LABOR_LOG_ENABLED } from '../lib/featureFlags';
 
 export type UserRole = 'viewer' | 'manager' | 'admin';
 
@@ -93,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // The effective user — either the real logged-in user, or whoever the role/view
   // switcher is currently impersonating (mock-only, v1).
   const user: User | null = (() => {
-    if (!viewAsId) return realUser;
+    if (!LABOR_LOG_ENABLED || !viewAsId) return realUser;
     const mockUser = getAllUsers().find((u) => u.id === viewAsId);
     if (!mockUser) return realUser;
     return {
@@ -270,7 +271,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     canDeleteStatus,
 
     realUser,
-    isViewingAs: viewAsId !== null,
+    isViewingAs: LABOR_LOG_ENABLED && viewAsId !== null,
     viewAsUser,
     hasTag,
     canAccessLaborLog,

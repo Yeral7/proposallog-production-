@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '../../../../lib/db';
 import { isDateOnly } from '../../../../lib/timezone';
+import { schedulePublish } from '../../../../lib/notionAfterSave';
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -69,6 +70,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         { error: 'Failed to update project' },
         { status: 500 }
       );
+    }
+
+    try { schedulePublish(projectId); } catch (publishError) {
+      console.error('Notion publish-on-save scheduling failed', projectId, publishError);
     }
 
     return NextResponse.json({ 

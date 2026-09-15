@@ -5,12 +5,17 @@ import { fetchWithAuth } from '@/lib/apiClient';
 
 interface SyncStatus {
   writesEnabled: boolean;
+  supabaseWritesEnabled?: boolean;
   previewEnabled: boolean;
   tokenConfigured: boolean;
 }
 
 interface ProposalRow {
-  projectId: number;
+  projectId: number | null;
+  notionPageId?: string;
+  builder?: string | null;
+  fields?: string[];
+  conflicts?: string[];
   sourceProjectId: number;
   memberIds?: number[];
   values?: Record<string, string | number | null>;
@@ -31,11 +36,12 @@ interface Preview {
   dryRun?: boolean;
 }
 
-type Scope = 'source' | 'compare' | 'setup' | 'publish';
+type Scope = 'source' | 'compare' | 'setup' | 'publish' | 'inbound';
 
 export default function NotionSyncPanel() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [lastScope, setLastScope] = useState<Scope | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [projectId, setProjectId] = useState('');
@@ -54,15 +60,18 @@ export default function NotionSyncPanel() {
   const run = async (scope: Scope, dryRun = true, cursor = afterProjectId) => {
     if (!dryRun && !window.confirm(scope === 'setup'
       ? 'Add the missing sync properties to the two development Notion databases? Supabase will not be changed.'
-      : `Publish ${projectId ? `the group containing project #${projectId}` : `up to 5 groups after #${cursor}`} to development Notion? Supabase will not be changed.`)) return;
+      : scope === 'inbound'
+        ? 'Pull up to 10 changed or new rows from development Notion into Supabase? Projects and lookups may be created or updated.'
+        : `Publish ${projectId ? `the group containing project #${projectId}` : `up to 5 groups after #${cursor}`} to development Notion? Supabase will not be changed.`)) return;
     setBusy(true);
     setError('');
     setPreview(null);
+    setLastScope(scope);
     if (scope === 'publish') setAfterProjectId(cursor);
     try {
       const response = await fetchWithAuth('/api/sync/notion', {
         method: 'POST',
-        body: JSON.stringify({ scope, dryRun, limit: scope === 'publish' ? 5 : 20, ...(scope !== 'setup' && projectId ? { projectId: Number(projectId) } : {}), ...(scope === 'publish' ? { afterProjectId: cursor } : {}) }),
+        body: JSON.stringify({ scope, dryRun, limit: scope === 'publish' ? 5 : scope === 'inbound' ? 10 : 20, ...(scope !== 'setup' && scope !== 'inbound' && projectId ? { projectId: Number(projectId) } : {}), ...(scope === 'publish' ? { afterProjectId: cursor } : {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Notion request failed');
@@ -98,10 +107,14 @@ export default function NotionSyncPanel() {
       <div className="flex flex-wrap items-end gap-3 mt-3">
         <button onClick={() => run('setup')} disabled={busy || !notionReady} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">Dry-run Setup</button>
         <button onClick={() => run('publish')} disabled={busy || !notionReady} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">Dry-run Publish</button>
+        <button onClick={() => run('inbound')} disabled={busy || !notionReady} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">Dry-run Pull</button>
         {status?.writesEnabled && <>
           <button onClick={() => run('setup', false)} disabled={busy || !notionReady} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 disabled:opacity-50">Apply Notion Setup</button>
           <button onClick={() => run('publish', false)} disabled={busy || !notionReady} className="px-4 py-2 bg-[var(--primary-color)] text-white rounded-md text-sm disabled:opacity-50">Publish to Notion</button>
         </>}
+        {status?.writesEnabled && status?.supabaseWritesEnabled && (
+          <button onClick={() => run('inbound', false)} disabled={busy || !notionReady} className="px-4 py-2 bg-[var(--primary-color)] text-white rounded-md text-sm disabled:opacity-50">Pull from Notion</button>
+        )}
       </div>
       <p className="mt-3 text-sm text-gray-600">Publish batches contain up to 5 groups, starting after #{afterProjectId}. {afterProjectId > 0 && <button disabled={busy} onClick={() => { setAfterProjectId(0); setPreview(null); }} className="underline">Reset to first batch</button>}</p>
       {status && !status.writesEnabled && <p className="mt-3 text-sm text-gray-600">Live web publishing is disabled. Enable NOTION_SYNC_PUBLISH_ENABLED only on a single publisher host with persistent NOTION_SYNC_STATE_DIR storage.</p>}
@@ -115,8 +128,25 @@ export default function NotionSyncPanel() {
             <p className="font-medium">Notion setup properties:</p>
             {preview.changes.map(change => <p key={change.dataSourceId}>{change.dataSourceId}: {change.properties.join(', ') || 'no changes needed'}</p>)}
           </div>}
-          {(preview.results || preview.proposals || []).map(proposal => (
-            <details key={proposal.projectId} className="mt-3 border border-gray-200 rounded-md p-3">
+          {lastScope === 'inbound' && preview.results && (
+            <table className="mt-3 w-full text-sm text-gray-700 border border-gray-200">
+              <thead><tr className="bg-gray-50 text-left">
+                <th className="px-3 py-2">Action</th><th className="px-3 py-2">Project</th><th className="px-3 py-2">Notion page</th><th className="px-3 py-2">Builder</th><th className="px-3 py-2">Fields / conflicts</th><th className="px-3 py-2">Error</th>
+              </tr></thead>
+              <tbody>{preview.results.map((row, index) => (
+                <tr key={row.notionPageId ?? row.projectId ?? index} className="border-t border-gray-200">
+                  <td className="px-3 py-2">{row.action}</td>
+                  <td className="px-3 py-2">{row.projectId ?? ''}</td>
+                  <td className="px-3 py-2">{row.notionPageId ?? ''}</td>
+                  <td className="px-3 py-2">{row.builder ?? ''}</td>
+                  <td className="px-3 py-2">{[...(row.fields || []), ...(row.conflicts || []).map(field => `conflict: ${field}`)].join(', ')}</td>
+                  <td className="px-3 py-2 text-red-700">{row.error ?? ''}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+          {lastScope !== 'inbound' && (preview.results || preview.proposals || []).map((proposal, index) => (
+            <details key={proposal.projectId ?? proposal.notionPageId ?? index} className="mt-3 border border-gray-200 rounded-md p-3">
               <summary className="cursor-pointer text-sm text-gray-800">
                 #{proposal.projectId}{proposal.values ? ` — ${proposal.values.project_name} — ${proposal.values.builder_name || 'No GC'}` : ''} — latest row #{proposal.sourceProjectId}{proposal.action ? ` — ${proposal.action}` : ''}
               </summary>

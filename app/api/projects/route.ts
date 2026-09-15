@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '../../../lib/db';
 import { isDateOnly } from '../../../lib/timezone';
+import { schedulePublish } from '../../../lib/notionAfterSave';
 
 export async function GET() {
   try {
@@ -102,6 +103,10 @@ export async function POST(request: Request) {
         { error: 'Failed to create project' },
         { status: 500 }
       );
+    }
+
+    try { schedulePublish(newProject.id); } catch (publishError) {
+      console.error('Notion publish-on-save scheduling failed', newProject.id, publishError);
     }
 
     return NextResponse.json({ 

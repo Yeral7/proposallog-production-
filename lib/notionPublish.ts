@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { createNotionReader, createNotionRequest, getNotionSyncConfig, loadNotionSource } from './notionSyncServer';
@@ -8,19 +8,19 @@ import type { NotionProperty } from './notionSync';
 
 type Config = ReturnType<typeof getNotionSyncConfig>;
 type Schema = Record<string, NotionProperty>;
-const ID_FIELD = 'Supabase Project ID';
-const META_FIELD = 'Supabase Sync Snapshot';
-const RELATION_FIELD = 'Estimated Project';
+export const ID_FIELD = 'Supabase Project ID';
+export const META_FIELD = 'Supabase Sync Snapshot';
+export const RELATION_FIELD = 'Estimated Project';
 const DEV_PROPOSALS = '8c275b2d077e83ae9c6401d4877c73f0';
 const DEV_ESTIMATED = '3d775b2d077e80608206e8fc185a1452';
 
 function normalizedId(id: string) { return id.replace(/-/g, '').toLowerCase(); }
-function assertTarget(config: Config, dryRun: boolean) {
+export function assertTarget(config: Config, dryRun: boolean) {
   if (normalizedId(config.proposalDatabaseId) !== DEV_PROPOSALS || normalizedId(config.estimatedDatabaseId) !== DEV_ESTIMATED) throw new Error('Publishing is restricted to the approved development Notion databases.');
   if (!dryRun && !config.publishEnabled) throw new Error('Set NOTION_SYNC_PUBLISH_ENABLED=true or use the explicitly confirmed local publisher.');
 }
 
-function textProperty(text: string) {
+export function textProperty(text: string) {
   const chunks = Array.from(text).reduce<string[]>((parts, character) => {
     if (!parts.length || parts[parts.length - 1].length + character.length > 1800) parts.push('');
     parts[parts.length - 1] += character;
@@ -30,14 +30,14 @@ function textProperty(text: string) {
   return { rich_text: chunks.map(content => ({ type: 'text', text: { content } })) };
 }
 
-function readText(property: any): string {
+export function readText(property: any): string {
   return (property?.rich_text || property?.title || []).map((part: any) => part.plain_text ?? part.text?.content ?? '').join('');
 }
-function readId(page: any, schema: Schema) {
+export function readId(page: any, schema: Schema) {
   const property = Object.values(page.properties || {}).find((value: any) => value.id === schema[ID_FIELD]?.id) as any;
   return property?.type === 'number' ? String(property.number ?? '') : readText(property);
 }
-function byId(page: any, id: string): any {
+export function byId(page: any, id: string): any {
   return Object.values(page.properties || {}).find((property: any) => property.id === id);
 }
 
@@ -53,7 +53,7 @@ export function propertyFingerprint(property: any): string {
   return createHash('sha256').update(JSON.stringify([type, value])).digest('hex');
 }
 
-function metadata(properties: Record<string, any>, context: Record<string, any>) {
+export function metadata(properties: Record<string, any>, context: Record<string, any>) {
   return { version: 1, ...context, fingerprints: Object.fromEntries(Object.entries(properties).map(([id, property]) => [id, propertyFingerprint(property)])) };
 }
 
@@ -104,17 +104,71 @@ export function setupProperties(schema: Schema, estimatedSourceId?: string) {
   return additions;
 }
 
-type SavedState = Record<string, { pending?: boolean; pageId?: string }>;
-async function withState<T>(config: Config, dryRun: boolean, action: (state: SavedState, save: () => Promise<void>) => Promise<T>) {
+export class LockHeldError extends Error {}
+
+type SavedState = Record<string, { pending?: boolean; pageId?: string; projectId?: number } | any>;
+
+function syncTarget(config: Config) {
+  return createHash('sha256').update(config.proposalDatabaseId + config.estimatedDatabaseId).digest('hex').slice(0, 16);
+}
+
+const LOCK_MESSAGE = 'Another publisher is running, or its lock survived an interrupted run. Check the sync lock before retrying.';
+const LOCK_LEASE_MS = 120_000;
+
+async function withSupabaseState<T>(config: Config, dryRun: boolean, db: SupabaseClient | undefined, action: (state: SavedState, save: () => Promise<void>) => Promise<T>) {
+  if (!db) throw new Error('The Supabase sync state store requires a database client.');
+  const target = syncTarget(config);
+  const owner = randomUUID();
+  const lease = () => new Date(Date.now() + LOCK_LEASE_MS).toISOString();
+  let locked = false;
+  if (!dryRun) {
+    const { error } = await db.from('notion_sync_lock').insert({ target, owner, expires_at: lease() });
+    if (error) {
+      if (error.code !== '23505') throw new Error('Could not acquire the sync lock.');
+      const { data, error: takeoverError } = await db.from('notion_sync_lock').update({ owner, expires_at: lease() }).eq('target', target).lt('expires_at', new Date().toISOString()).select();
+      if (takeoverError || !Array.isArray(data) || !data.length) throw new LockHeldError(LOCK_MESSAGE);
+    }
+    locked = true;
+  }
+  try {
+    const { data, error } = await db.from('notion_sync_journal').select('key, value').eq('target', target);
+    if (error || !Array.isArray(data)) throw new Error('Could not read the sync recovery journal. Sync stopped.');
+    const state: SavedState = {};
+    const loaded = new Set<string>();
+    const deleted = new Set<string>();
+    for (const row of data as { key: string; value: any }[]) { state[row.key] = row.value; loaded.add(row.key); }
+    const save = async () => {
+      if (dryRun) throw new Error('Dry run cannot write sync state.');
+      for (const key of loaded) if (!Object.hasOwn(state, key)) deleted.add(key);
+      const rows = Object.entries(state).map(([key, value]) => ({ target, key, value }));
+      if (rows.length) {
+        const { error: upsertError } = await db.from('notion_sync_journal').upsert(rows, { onConflict: 'target,key' });
+        if (upsertError) throw new Error('Could not save the sync recovery journal.');
+      }
+      if (deleted.size) {
+        const { error: deleteError } = await db.from('notion_sync_journal').delete().eq('target', target).in('key', [...deleted]);
+        if (deleteError) throw new Error('Could not save the sync recovery journal.');
+        for (const key of deleted) loaded.delete(key);
+        deleted.clear();
+      }
+      if (locked) await db.from('notion_sync_lock').update({ expires_at: lease() }).eq('target', target).eq('owner', owner);
+    };
+    return await action(state, save);
+  } finally {
+    if (locked) await db.from('notion_sync_lock').delete().eq('target', target).eq('owner', owner);
+  }
+}
+
+async function withFileState<T>(config: Config, dryRun: boolean, action: (state: SavedState, save: () => Promise<void>) => Promise<T>) {
   const directory = path.resolve(config.stateDirectory);
-  const target = createHash('sha256').update(config.proposalDatabaseId + config.estimatedDatabaseId).digest('hex').slice(0, 16);
+  const target = syncTarget(config);
   const file = path.join(directory, `${target}.json`);
   const lockPath = path.join(directory, `${target}.lock`);
   let lock: Awaited<ReturnType<typeof fs.open>> | undefined;
   if (!dryRun) {
     await fs.mkdir(directory, { recursive: true });
     try { lock = await fs.open(lockPath, 'wx'); }
-    catch { throw new Error('Another publisher is running, or its lock survived an interrupted run. Check the local sync lock before retrying.'); }
+    catch { throw new LockHeldError('Another publisher is running, or its lock survived an interrupted run. Check the local sync lock before retrying.'); }
   }
   try {
     if (lock) await lock.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
@@ -132,7 +186,48 @@ async function withState<T>(config: Config, dryRun: boolean, action: (state: Sav
   }
 }
 
-export async function setupNotionPublishing(config: Config, dryRun = true) {
+export async function withState<T>(config: Config, dryRun: boolean, action: (state: SavedState, save: () => Promise<void>) => Promise<T>, db?: SupabaseClient) {
+  if (config.stateStore === 'supabase') return withSupabaseState(config, dryRun, db, action);
+  return withFileState(config, dryRun, action);
+}
+
+export async function readJournalValue(db: SupabaseClient | undefined, config: Config, key: string) {
+  const target = syncTarget(config);
+  if (config.stateStore === 'supabase') {
+    if (!db) throw new Error('The Supabase sync state store requires a database client.');
+    const { data, error } = await db.from('notion_sync_journal').select('value').eq('target', target).eq('key', key).single();
+    if (error && error.code !== 'PGRST116') throw new Error('Could not read the sync journal.');
+    return (data as any)?.value;
+  }
+  try {
+    const state = JSON.parse(await fs.readFile(path.join(path.resolve(config.stateDirectory), `${target}.json`), 'utf8'));
+    return state[key];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw new Error('Could not read the sync recovery journal.');
+  }
+}
+
+export async function writeJournalValue(db: SupabaseClient | undefined, config: Config, key: string, value: any) {
+  const target = syncTarget(config);
+  if (config.stateStore === 'supabase') {
+    if (!db) throw new Error('The Supabase sync state store requires a database client.');
+    const { error } = await db.from('notion_sync_journal').upsert({ target, key, value }, { onConflict: 'target,key' });
+    if (error) throw new Error('Could not write the sync journal.');
+    return;
+  }
+  const directory = path.resolve(config.stateDirectory);
+  const file = path.join(directory, `${target}.json`);
+  await fs.mkdir(directory, { recursive: true });
+  let state: SavedState = {};
+  try { state = JSON.parse(await fs.readFile(file, 'utf8')); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('Could not read the sync recovery journal.'); }
+  state[key] = value;
+  await fs.writeFile(`${file}.tmp`, JSON.stringify(state), { mode: 0o600 });
+  await fs.rename(`${file}.tmp`, file);
+}
+
+export async function setupNotionPublishing(config: Config, dryRun = true, db?: SupabaseClient) {
   assertTarget(config, dryRun);
   return withState(config, dryRun, async () => {
     const request = createNotionRequest(config);
@@ -147,7 +242,7 @@ export async function setupNotionPublishing(config: Config, dryRun = true) {
       if (!dryRun && Object.keys(change.properties).length) await request(`data_sources/${change.source.id}`, { properties: change.properties }, 'PATCH');
     }
     return { dryRun, supabaseWrites: 0, changes: changes.map(change => ({ dataSourceId: change.source.id, properties: Object.keys(change.properties) })) };
-  });
+  }, db);
 }
 
 export async function publishNotionProjects(db: SupabaseClient, config: Config, options: { dryRun?: boolean; limit: number; projectId?: number; afterProjectId?: number }) {
@@ -249,5 +344,5 @@ export async function publishNotionProjects(db: SupabaseClient, config: Config, 
       }
     }
     return { dryRun, supabaseWrites: 0, interrupted, nextAfterProjectId: interrupted ? results[results.length - 1].projectId - 1 : source.nextAfterProjectId, sourceProjectCount: source.sourceProjectCount, groupedProjectCount: source.groupedProjectCount, issues: source.issues, results };
-  });
+  }, db);
 }

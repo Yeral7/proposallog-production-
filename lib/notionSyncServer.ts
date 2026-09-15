@@ -8,6 +8,7 @@ export function getNotionSyncConfig(env: NodeJS.ProcessEnv = process.env) {
     publishEnabled: env.NOTION_SYNC_PUBLISH_ENABLED === 'true',
     inboundEnabled: env.NOTION_SYNC_INBOUND_ENABLED === 'true',
     stateDirectory: env.NOTION_SYNC_STATE_DIR || '.notion-sync',
+    stateStore: env.NOTION_SYNC_STATE_STORE === 'file' ? 'file' : env.NOTION_SYNC_STATE_STORE === 'supabase' || env.VERCEL ? 'supabase' : 'file',
     token: env.NOTION_TOKEN || '',
     proposalDatabaseId: env.NOTION_PROPOSALS_DATABASE_ID || '8c275b2d-077e-83ae-9c64-01d4877c73f0',
     estimatedDatabaseId: env.NOTION_ESTIMATED_PROJECTS_DATABASE_ID || '3d775b2d-077e-8060-8206-e8fc185a1452',
@@ -20,9 +21,9 @@ type SyncConfig = ReturnType<typeof getNotionSyncConfig>;
 
 export function getNotionSyncStatus(config: SyncConfig) {
   return {
-    mode: config.publishEnabled ? 'outbound' : 'dry-run',
+    mode: config.publishEnabled && config.inboundEnabled ? 'bidirectional' : config.publishEnabled ? 'outbound' : 'dry-run',
     writesEnabled: config.publishEnabled,
-    supabaseWritesEnabled: false,
+    supabaseWritesEnabled: config.inboundEnabled,
     scheduled: false,
     previewEnabled: config.previewEnabled || config.publishEnabled,
     tokenConfigured: Boolean(config.token),
