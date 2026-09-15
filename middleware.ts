@@ -20,7 +20,10 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/api/auth/login') ||
     request.nextUrl.pathname.startsWith('/api/auth/refresh') ||
     request.nextUrl.pathname.startsWith('/api/auth/logout') ||
-    request.nextUrl.pathname.startsWith('/api/auth/register')
+    request.nextUrl.pathname.startsWith('/api/auth/register') ||
+    // Machine-to-machine endpoints with their own auth (Notion HMAC signature / CRON_SECRET)
+    request.nextUrl.pathname === '/api/sync/notion/webhook' ||
+    request.nextUrl.pathname === '/api/sync/notion/cron'
   ) {
     return NextResponse.next();
   }
