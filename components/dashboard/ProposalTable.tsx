@@ -169,9 +169,9 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
                 </button>
               </th>
               <th className="py-4 px-4 text-left">
-                <button onClick={() => handleSort('estimation_due_date')} className="flex items-center hover:text-blue-500 focus:outline-none">
-                  Estimation Due Date
-                  {renderSortIcon('estimation_due_date')}
+                <button onClick={() => handleSort('follow_up_date')} className="flex items-center hover:text-blue-500 focus:outline-none">
+                  Follow-up Date
+                  {renderSortIcon('follow_up_date')}
                 </button>
               </th>
             </tr>
@@ -260,9 +260,9 @@ const ProposalTable: React.FC<ProposalTableProps> = ({
                   {project.contract_value ? `$${Number(project.contract_value).toLocaleString()}` : 'N/A'}
                 </td>
                 <td className="py-4 px-4">
-                  {project.estimation_due_date && project.estimation_due_date.trim()
+                  {project.follow_up_date && project.follow_up_date.trim()
                     ? (() => {
-                        const date = new Date(project.estimation_due_date);
+                        const date = new Date(project.follow_up_date);
                         if (isNaN(date.getTime())) return 'Invalid Date';
                         return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC' }).format(date);
                       })()
